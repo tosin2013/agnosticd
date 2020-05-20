@@ -83,7 +83,7 @@ glusterfs_image_tag: v3.11
 
 ocp_report: false
 remove_self_provisioners: false
-idm_ca_url: http://ipa.opentlc.com/ipa/config/ca.crt
+idm_ca_url: http://ipa1.opentlc.com/ipa/config/ca.crt
 zabbix_host: 23.246.247.58
 
 # Options for container_runtime: docker, cri-o
@@ -150,13 +150,14 @@ infranode_instance_type: "m4.4xlarge"
 node_instance_type: "m4.4xlarge"
 support_instance_type: "m4.4xlarge"
 nfs_instance_type: "{{ support_instance_type }}"
-
 node_instance_count: 5
 infranode_instance_count: 1
 master_instance_count: 1
 support_instance_count: "{{ 3 if install_glusterfs|bool else 1 }}"
 # scaleup
 new_node_instance_count: 0
+
+support_instance_public_dns: "{{ true if install_glusterfs | bool else false }}" 
 
 ###### VARIABLES YOU SHOULD ***NOT*** CONFIGURE FOR YOUR DEPLOYEMNT
 timeout: 60
@@ -176,13 +177,13 @@ master_lb_private_dns: "master1.{{ guid }}.internal"
 openshift_master_overwrite_named_certificates: true
 
 lets_encrypt_openshift_master_named_certificates:
-  - certfile: "/root/certificates/fullchain.pem"
-    keyfile: "/root/certificates/key.pem"
-    cafile: "/root/certificates/ca.cer"
+- certfile: "/root/certificates/fullchain.pem"
+  keyfile: "/root/certificates/privkey.pem"
+  cafile: "/root/certificates/ca.cer"
 
 lets_encrypt_openshift_hosted_router_certificate:
   certfile: "/root/certificates/fullchain.pem"
-  keyfile: "/root/certificates/key.pem"
+  keyfile: "/root/certificates/privkey.pem"
   cafile: "/root/certificates/ca.cer"
 
 project_request_message: 'To provision Projects you must request access in https://labs.opentlc.com or https://rhpds.redhat.com'
@@ -315,7 +316,8 @@ nfs_vg: nfsvg
 nfs_pvs: /dev/xvdd
 nfs_export_path: /srv/nfs
 nfs_size: 200
-
+nfs_server_address: "support1.{{guid}}.internal"
+nfs_exports_config: "*(insecure,rw,root_squash,no_wdelay,sync)"
 nfs_shares:
   - user-vols
 
@@ -459,7 +461,7 @@ instances:
 
   - name: "support"
     count: "{{support_instance_count}}"
-    public_dns: '{{ true if install_glusterfs | bool else false }}'
+    public_dns: '{{ support_instance_public_dns }}'
     dns_loadbalancer: false
     flavor:
       ec2: "{{support_instance_type}}"
@@ -472,7 +474,7 @@ instances:
     rootfs_size: "{{ rootfs_size_support }}"
     volumes:
       - name: docker_device
-        device_name: "{{docker_device}}"
+        device_name: "{{ docker_device }}"
         volume_size: "{{support_docker_size|d(docker_size)|d('50')}}"
         volume_type: gp2
         purpose: docker
@@ -486,5 +488,5 @@ instances:
         enable: "{{ install_nfs | bool }}"
         device_name: "{{nfs_pvs}}"
         volume_size: "{{nfs_size}}"
-        volume_type: gp2
+        volume_type: "{{ nfs_volume_type | default('gp2') }}"
         purpose: nfs

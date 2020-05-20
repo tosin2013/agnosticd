@@ -34,21 +34,11 @@
   become: true
   roles:
     - { role: "bastion", when: 'install_bastion' }
-    - { role: "ansible-version-lock" }
+# commented because ansible version 2.7 has bug on pip repo
+#    - { role: "ansible-version-lock" }
   tags:
     - step004
     - bastion_tasks
-
-- name: Inject and configure FTL on bastion as grader host
-  hosts: bastions
-  become: true
-  tasks:
-    - name: Setup FTL
-      include_role:
-        name: ftl-injector
-  tags:
-    - step004
-    - ftl-injector
 
 - name: Place Tower License from env_secret_vars on bastion
   hosts: bastions
