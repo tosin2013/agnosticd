@@ -122,3 +122,7 @@ sonarqube_route: "{{ sonarqube_urlprefix }}.{{ ocp_apps_domain }}"
 
 ###### Codeready defaults
 codeready_project_name: "{{ admin_project }}"
+
+
+##### Jenkins Defaults
+admin_password: openshift

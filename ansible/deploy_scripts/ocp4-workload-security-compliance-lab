@@ -9,7 +9,7 @@ MASTER_HOSTNAME="console-openshift-console.$APPS_DOMAIN"
 OCP_USERNAME="opentlc-mgr"
 SSH_USER="ec2-user"
 SSH_PRIVATE_KEY="fb78key.pem"
-USER_PASSWORD="r3dh4t1!"
+USER_PASSWORD="ch@ngeM3"
 GOGS_PASSWORD="openshift"
 NUM_USERS=3
 # Retrieve QUAY password here: https://access.redhat.com/solutions/3533201

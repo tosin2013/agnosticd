@@ -17,7 +17,7 @@ SOURCE_FILE=${1}
 ACTION=${2}
 
 source deploy_scripts/$SOURCE_FILE || exit $?
-
+source deploy_scripts/functions.sh
 
 echo $ACTION $WORKLOAD
 
@@ -39,4 +39,10 @@ ansible-playbook -i ${TARGET_HOST}, ./configs/ocp-workloads/${WORKLOAD_YAML} \
                  -e"quay_pull_user=${QUAY_PULL_USERNAME}" \
                  -e"quay_pull_password=${QUAY_PULL_PASSWORD}" \
                  -e"bastion_internal=${TARGET_HOST}" \
+                 -e"subdomain_base_suffix=${DOMAIN}" \
                  -e"ACTION=${ACTION}"
+
+if [ ${WORKLOAD} == "ocp4-workload-security-compliance-lab" ] && [ ${ACTION} == "create" ];
+then 
+  secuirty-compliance-lab
+fi 

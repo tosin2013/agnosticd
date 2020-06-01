@@ -73,12 +73,15 @@
     - name: create build template
       command: "{{ openshift_cli }} create -f {{ tmp_dir }}/files/buildconfig.yaml -n {{ my_user }}"
       tags: always
-      ignore_errors: true
+      ignore_errors: false
 
     - name: create jenkins pipeline
       command: "{{ openshift_cli }} new-app ecommerce-build-template -p INTERNAL_REGISTRY={{ ocp_registry_route }} -p BASTION={{ ocp_bastion }} -p APP_DOMAIN={{ ocp_apps_domain }} -p API_ENDPOINT={{ openshift_master }} -p GUID={{ guid }} -p GOGS_USER={{ my_user }} -p SSH_PASSWORD={{ admin_password }} -n {{ my_user }}"
       tags: always
       ignore_errors: true
+
+    - pause:
+        prompt: "check the jenkins pipeline command"
 
 #    Quotas caused issues (errors) in OCP4
 #    # Create cluster quota for the user to prevent abuse
