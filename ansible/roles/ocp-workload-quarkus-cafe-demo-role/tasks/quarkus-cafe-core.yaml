@@ -1,0 +1,65 @@
+- name: Create mongodb instance
+  command: "oc new-app --name=mongodb --template=mongodb-ephemeral -e MONGODB_USER=mongodb -e MONGODB_PASSWORD=mongodb -e MONGODB_DATABASE=cafedb -e MONGODB_ADMIN_PASSWORD=mongodb"
+
+- name: Waiting for mongodb build to complete
+  shell: |
+   set -o pipefail &&  oc get pods  | grep Completed | grep mongodb | wc -l
+  register: install_status
+  until: "'1' in install_status.stdout"
+  retries: 120
+  delay: 15
+  args:
+    executable: /bin/bash
+
+- name: Waiting for mongodb deployment
+  shell: |
+    set -o pipefail && oc get pods  | grep Running | grep mongodb | wc -l
+  register: install_status
+  until: "'1' in install_status.stdout"
+  retries: 60
+  delay: 15
+  args:
+    executable: /bin/bash
+
+- name: Copying over quarkus-cafe-core application
+  template:
+    src: templates/s2i/quarkus-cafe-core.yaml.j2
+    dest:  "{{ config_location }}/quarkus-cafe-core.yaml"
+    owner: "{{ default_owner }}"
+    group: "{{ default_group }}"
+    mode: 0666
+  when: deployment_method == "s2i"
+
+- name: Copying over quarkus-cafe-core application
+  template:
+    src: templates/docker/quarkus-cafe-core.yaml.j2
+    dest:  "{{ config_location }}/quarkus-cafe-core.yaml"
+    owner: "{{ default_owner }}"
+    group: "{{ default_group }}"
+    mode: 0666
+  when: deployment_method == "docker"
+
+- name: Create quarkus-cafe-core instance
+  command: "oc create -f {{ config_location }}/quarkus-cafe-core.yaml"
+
+- name: Waiting for quarkus-cafe-core build to complete
+  shell: |
+    set -o pipefail && oc get pods  | grep Completed | grep quarkus-cafe-core | wc -l
+  register: install_status
+  when: deployment_method == "s2i"
+  until: "'2' in install_status.stdout"
+  retries: 120
+  delay: 15
+  args:
+    executable: /bin/bash
+
+- name: Waiting for quarkus-cafe-core deployment
+  shell: |
+    set -o pipefail && oc get pods  | grep Running | grep quarkus-cafe-core | wc -l
+  register: install_status
+  until: "'1' in install_status.stdout"
+  retries: 60
+  delay: 15
+  args:
+    executable: /bin/bash
+

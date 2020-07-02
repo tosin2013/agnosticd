@@ -33,12 +33,30 @@
   - "Variable 2:      {{ ocp_workload_example.variable_2 }}"
   - "Variable Secret: {{ ocp_workload_example.variable_secret }}"
 
+- name: Create new project for quarkus-cafe
+  command: "oc new-project {{ project_namespace }}"
+  ignore_errors: yes
 
+- name: Switch to project for quarkus-cafe
+  command:  "oc project {{ project_namespace }}"
 
+- name: AMQ Streams installation
+  include_tasks: amq-streams-install.yml
 
+- name: Configure quarkus-cafe-barista Application
+  include_tasks: quarkus-cafe-barista.yml
 
+- name: Configure quarkus-cafe-core Application
+  include_tasks: quarkus-cafe-core.yaml
 
+- name: Configure quarkus-cafe-kitchen Application
+  include_tasks: quarkus-cafe-kitchen.yaml
 
+- name: Configure quarkus-cafe-web Application
+  include_tasks: quarkus-cafe-web.yaml
+
+- name: Configure quarkus-cafe-customermock Application
+  include_tasks: quarkus-cafe-customermock.yaml
 
 # Leave this as the last task in the playbook.
 # --------------------------------------------
