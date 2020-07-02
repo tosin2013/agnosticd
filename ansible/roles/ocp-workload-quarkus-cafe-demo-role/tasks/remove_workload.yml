@@ -79,5 +79,5 @@
 # --------------------------------------------
 - name: remove_workload tasks complete
   debug:
-    msg: "Remove Workload tasks completed successfully."
+    msg: "Post-Software checks completed successfully - Removed"
   when: not silent|bool
