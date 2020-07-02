@@ -1,0 +1,57 @@
+---
+become_override: False
+ocp_username: wkulhane-redhat.com
+silent: False
+---
+# defaults file for quarkus-cafe-demo-role\
+deployment_method: docker #s2i or from docker
+default_owner: {{ ocp_username }}
+default_group: {{ ocp_username }}
+use_kubeconfig: false
+kubeconfig_path: /home/username/ocp4folder/auth/kubeconfig
+insecure_skip_tls_verify: true
+project_namespace: quarkus-cafe-demo
+git_url: https://github.com/jeremyrdavis/quarkus-cafe-demo.git
+delete_deployment: false
+amqstartingCSV: amqstreams.v1.4.1
+config_location: "/tmp/"
+kafka_cluster_name: cafe-cluster
+skip_amq_install: false
+skip_quarkus_cafe_barista: false
+skip_quarkus_cafe_core: false
+skip_quarkus_cafe_kitchen: false
+skip_quarkus_cafe_web: false
+skip_quarkus_cafe_customermock: false
+quarkus_build_memory_limit: 6Gi # Default 6Gi
+quarkus_build_cpu_limit: 1 # Default 1
+quarkus_core_build_memory_limit:  8Gi # Default 8Gi
+quarkus_image_stream_name: ubi-quarkus-native-s2i:20.0.0-java11
+kafka_stream_url: http://quarkus-cafe-web-{{ project_namespace}}.apps.{{ domain }}/dashboard/stream
+
+# If your workload needs customization options provide variables
+# in a dictionary. The dictionary should be named "<role name>_defaults".
+# So because this example workload is called "ocp-workload-example" the dictionary
+# should be named "ocp_workload_example_defaults". Note that the dictionary can not
+# include "-" characters, so replace all "-" with "_" instead.
+#
+# You can override the defaults as parameters to the Ansible run that runs
+# your workload. The overrides should be in a dictionary called
+# "<role name>_vars".
+#
+# If there are any secrets that need to be passed (data that should not be in a
+# public repo somewhere) you can specify another dictionary "<role name>_secrets".
+#
+# When the workload is executed the dictionary "<role name>" will be constructed from
+# "<role name>_defaults" plus "<role name>_vars" (if defined) and "<role name>_secrets"
+# (if defined).
+#
+# The logic in the workload should only use the dictionary "<role name>".
+ocp_workload_example_defaults:
+  variable_1: "value 1"
+  variable_2: "value 2"
+  variable_secret: ""
+
+
+openshift_token: 1234567890
+openshift_url: https://api.ocp4.example.com:6443
+domain: ocp4.example.com
