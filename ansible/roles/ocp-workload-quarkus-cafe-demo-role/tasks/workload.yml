@@ -33,3 +33,4 @@
 - name: workload tasks complete
   debug:
     msg:  "Workload Tasks Complete"
+  when: not silent|bool
