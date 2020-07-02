@@ -57,40 +57,18 @@ When running your workload the first task in link:./tasks/workload.yml[./tasks/w
 When adapting this example role for your particular workload make sure to update the dictionary names in both link:./tasks/workload.yml[./tasks/workload.yml] and link:./tasks/remove_workload.yml[./tasks/remove_workload.yml] files.
 
 
-=== Deploy a Workload with the `ocp-workload` playbook [Mostly for testing]
-
-. If your workload uses parameters create a `<role name>_vars.yaml` input file.
-+
-.ocp_workload_example_vars.yaml
-[source,yaml]
-----
-# You can set any variable, not just the dictionary
-silent: true
-
-# Set up the `vars` dictionary
-ocp_workload_example_vars:
-  variable_2: "My variable 2"
-----
-
-. If your workload uses secrets create a `<role name>_secrets.yaml` input file.
-+
-.ocp_workload_example_secrets.yaml
-[source,yaml]
-----
-# Set up the `secrets` dictionary
-ocp_workload_example_secrets:
-  variable_secret: "top secret data"
-----
+=== Deploy a Workload with the `ocp-workload-quarkus-cafe-demo-role` playbook [Mostly for testing]
 
 . Set up Environment Variables for the bastion you want to run this role on.
 +
 [source,yaml]
 ----
 TARGET_HOST="bastion.dev.openshift.opentlc.com"
-OCP_USERNAME="wkulhane-redhat.com"
+OCP_USERNAME="openshiftuser"
 ANSIBLE_USER="ec2-user"
-WORKLOAD="ocp-workload-example"
+WORKLOAD="ocp-workload-quarkus-cafe-demo-role"
 GUID=1001
+SSH_KEYNAME=sshkeyname.pem
 ----
 
 . Finally run the workload passing the input files as parameters:
@@ -99,165 +77,34 @@ GUID=1001
 ----
 # a TARGET_HOST is specified in the command line, without using an inventory file
 ansible-playbook -i ${TARGET_HOST}, ./configs/ocp-workloads/ocp-workload.yml \
-    -e"ansible_ssh_private_key_file=~/.ssh/keytoyourhost.pem" \
-    -e"ansible_user=${ANSIBLE_USER}" \
-    -e"ocp_username=${OCP_USERNAME}" \
-    -e"ocp_workload=${WORKLOAD}" \
-    -e"guid=${GUID}" \
-    -e"ACTION=create" \
-    -e @./ocp_workload_example_vars.yaml \
-    -e @./ocp_workload_example_secrets.yaml
-----
-+
-Note how the dictionary got set up:
-
-* *Variable 1: value 1* This value comes from the *defaults* dictionary. It did not get overwritten anywhere
-* *Variable 2: My variable 2* This value comes from the *vars* dictionary that was passed as a parameter
-* *Variable Secret: top secret data* This value comes from the *secrets* dictionary that was passed as a parameter
-+
-.Example output when using the examples above:
-[source,text,options="nowrap"]
-----
-[...]
-
-TASK [ocp-workload-example : Running Pre Workload Tasks] *****************************************************************************************************************************************************************
-Monday 16 March 2020  15:27:10 -0400 (0:00:00.070)       0:00:05.383 **********
-included: /Users/wkulhane/Development/agnosticd/ansible/roles/ocp-workload-example/tasks/./pre_workload.yml for bastion.dev4.openshift.opentlc.com
-
-TASK [ocp-workload-example : Set up ocp4_workload_example combined dictionary] *******************************************************************************************************************************************
-Monday 16 March 2020  15:27:10 -0400 (0:00:00.051)       0:00:05.434 **********
-ok: [bastion.dev4.openshift.opentlc.com]
-
-[...]
-
-TASK [ocp-workload-example : Setting up workload for user] ***************************************************************************************************************************************************************
-Monday 16 March 2020  15:27:10 -0400 (0:00:00.047)       0:00:05.625 **********
-ok: [bastion.dev4.openshift.opentlc.com] => {
-    "msg": "Setting up workload for user ocp_username = wkulhane-redhat.com"
-}
-
-TASK [ocp-workload-example : Print Example Variables] ********************************************************************************************************************************************************************
-Monday 16 March 2020  15:27:10 -0400 (0:00:00.032)       0:00:05.658 **********
-ok: [bastion.dev4.openshift.opentlc.com] => (item=Variable 1: value 1.) => {
-    "msg": "Variable 1: value 1."
-}
-ok: [bastion.dev4.openshift.opentlc.com] => (item=Variable 2: My variable 2.) => {
-    "msg": "Variable 2: My variable 2."
-}
-ok: [bastion.dev4.openshift.opentlc.com] => (item=Variable Secret: top secret data) => {
-    "msg": "Variable Secret: top secret data"
-}
-
-[...]
+                 -e"ansible_ssh_private_key_file=/home/${ANSIBLE_USER}/.ssh/${SSH_KEYNAME}" \
+                 -e"ansible_user=${ANSIBLE_USER}" \
+                 -e"ocp_username=${OCP_USERNAME}" \
+                 -e"ocp_workload=${WORKLOAD}" \
+                 -e"guid=${GUID}" \
+                 -e"ocp_user_needs_quota=true" \
+                 -e"domain=cluster-${GUID}.${GUID}.example.opentlc.com" \
+                 -e"ACTION=create"
 ----
 
 === To Delete an environment
 
 ----
 TARGET_HOST="bastion.dev.openshift.opentlc.com"
-OCP_USERNAME="wkulhane-redhat.com"
+OCP_USERNAME="openshiftuser"
 ANSIBLE_USER="ec2-user"
-WORKLOAD="ocp-workload-example"
-GUID=1002
+WORKLOAD="ocp-workload-quarkus-cafe-demo-role"
+GUID=1001
+SSH_KEYNAME=sshkeyname.pem
 
 # a TARGET_HOST is specified in the command line, without using an inventory file
 ansible-playbook -i ${TARGET_HOST}, ./configs/ocp-workloads/ocp-workload.yml \
-    -e"ansible_ssh_private_key_file=~/.ssh/keytoyourhost.pem" \
-    -e"ansible_user=ec2-user" \
-    -e"ocp_username=${OCP_USERNAME}" \
-    -e"ocp_workload=${WORKLOAD}" \
-    -e"guid=${GUID}" \
-    -e"ACTION=remove" \
-    -e @./ocp_workload_example_vars.yaml \
-    -e @./ocp_workload_example_secrets.yaml
+                 -e"ansible_ssh_private_key_file=/home/${ANSIBLE_USER}/.ssh/${SSH_KEYNAME}" \
+                 -e"ansible_user=${ANSIBLE_USER}" \
+                 -e"ocp_username=${OCP_USERNAME}" \
+                 -e"ocp_workload=${WORKLOAD}" \
+                 -e"guid=${GUID}" \
+                 -e"ocp_user_needs_quota=true" \
+                 -e"domain=cluster-${GUID}.${GUID}.example.opentlc.com" \
+                 -e"ACTION=remove"
 ----
-
-== Deploying a Workload with AgnosticV
-
-When creating a configuration in AgnosticV that includes the deployment of the workload you can specify the dictionary straight in the AgnosticV config. Because AgnosticV configs are usually created by combining a `common.yaml` file with either `dev.yaml`, `test.yaml` or `prod.yaml` you can specify parts of the dictionary in each of these files. For example you could have common values defined in the `common.yaml` file and then specific values for development or production environments in `dev.yaml` or `prod.yaml`.
-
-AgnosticV merges the definition files starting with `common.yaml` and then adding/overwriting what comes from either `dev.yaml` or `prod.yaml`.
-
-Example of a simple AgnosticV config:
-
-.common.yaml
-[source,yaml]
-----
-# --- Quay Shared Workload Deployment for RPDS
-# --- System: RHPDS
-# --- Catalog: OpenShift Demos
-# --- Catalog Item: Quay 3 on OpenShift 4
-
-# --- Platform
-platform: rhpds
-
-# --- Cloud Provider
-cloud_provider: none
-
-# --- Config
-env_type: ocp-workloads
-ocp_workload: ocp4-workload-quay-operator
-# This workload must be run as ec2-user (or cloud-user on OpenStack)
-# because it has tasks requiring sudo.
-ansible_user: ec2-user
-ansible_ssh_private_key_file: /home/opentlc-mgr/.ssh/opentlc_admin_backdoor.pem
-
-# --- Ensure the workload prints the correct statements for CloudForms to realize it finished
-workload_shared_deployment: true
-
-# --- Workload Configuration
-ocp4_workload_quay_operator_vars:
-  project: "quay-{{ guid }}"
-
-# --- AgnosticV Meta variables
-agnosticv_meta:
-  params_to_variables:
-    user: ocp_username
-  secrets:
-  # This secret file holds the token to pull the Quay image
-  - ocp4_workload_quay_secrets
-----
-
-.dev.yaml
-[source,yaml]
-----
-purpose: development
-
-# --- Use specific variable values for Development
-target_host: bastion.dev4.openshift.opentlc.com
-
-# --- Workload Configuration Overrides
-# Deploy Quay v3.2.0
-ocp4_workload_quay_operator_vars:
-  quay_image_tag: "v3.2.0"
-  clair_image_tag: "v3.2.0"
-----
-
-.prod.yaml
-[source,yaml]
-----
----
-purpose: production
-
-# --- Use specific variable values for Production
-target_host: bastion.rhpds.openshift.opentlc.com
-
-# --- Workload Configuration Overrides
-ocp4_workload_quay_operator_vars:
-  quay_image_tag: "v3.1.3"
-  clair_image_tag: "v3.1.3"
-
-# --- AgnosticV Meta variables
-agnosticv_meta:
-  agnosticd_git_tag_prefix: ocp4-workload-quay-rhpds-prod
-----
-
-
-== Complex Examples
-
-If you want to see more examples of how this works in a real world workload the following workloads already use this approach:
-
-* ocp4-workload-authentication
-* ocp4-workload-machinesets
-* ocp4-workload-logging
-* ocp4-workload-quay-operator

@@ -4,11 +4,11 @@ ocp_username: wkulhane-redhat.com
 silent: False
 deployment_method: docker #s2i or from docker
 default_owner: "{{ ansible_user }}"
-default_group: "{{ ansible_user }}"
+default_group: "users"
 insecure_skip_tls_verify: true
 project_namespace: quarkus-cafe-demo
 git_url: https://github.com/jeremyrdavis/quarkus-cafe-demo.git
-amqstartingCSV: amqstreams.v1.4.1
+amqstartingCSV: amqstreams.v1.5.0
 config_location: "/tmp/"
 kafka_cluster_name: cafe-cluster
 quarkus_build_memory_limit: 6Gi # Default 6Gi

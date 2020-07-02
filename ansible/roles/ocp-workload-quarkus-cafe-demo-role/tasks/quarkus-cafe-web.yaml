@@ -18,7 +18,6 @@
 
 - name: Create quarkus-cafe-web instance
   command: "oc create -f {{ config_location }}/quarkus-cafe-web.yaml"
-  when: not delete_deployment|bool
 
 - name: Waiting for quarkus-cafe-web build to complete
   shell: |
