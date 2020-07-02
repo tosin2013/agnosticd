@@ -56,9 +56,18 @@
             loop_var: n
 
     - when: test_empty_config_multiline_secret is defined
+      name: Ensure the multiline variable passed as secret is multiline
       assert:
         that: test_empty_config_multiline_secret.rstrip().split('\n') | length > 1
         msg: Multiline secret is not multiline
+
+    - name: Deploy Bookbag
+      when:
+      - bookbag_git_repo is defined
+      include_role:
+        name: bookbag
+      vars:
+        ACTION: create
 
     - name: Print string expected by Cloudforms
       debug:
