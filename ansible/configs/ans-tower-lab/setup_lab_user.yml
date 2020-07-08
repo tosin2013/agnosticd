@@ -71,4 +71,31 @@
         dest: "/home/{{ lab_user }}/license.txt"
         mode: 0644
 
+    - name: Copy Openstack PEM key
+      blockinfile:
+        path: "/home/{{ lab_user }}/.ssh/openstack.pem"
+        block: |
+          {{ openstack_pem | b64decode }}
+        mode: 0440
+        state: present
+        create: yes
+
+    - name: Copy Openstack Pub key
+      blockinfile:
+        path: "/home/{{ lab_user }}/.ssh/openstack.pub"
+        block: |
+          {{ openstack_pub | b64decode }}
+        mode: 0440
+        state: present
+        create: yes
+
+    - name: Remove first and last lines from Openstack keys
+      lineinfile:
+        path: "/home/{{ lab_user }}/.ssh/{{ item }}"
+        regexp: '^#(.*)$'
+        state: absent
+      loop:
+        - "openstack.pem"
+        - "openstack.pub"
+
 ...
