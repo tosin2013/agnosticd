@@ -3,58 +3,8 @@
 
 == Role overview
 
-* This is a working no-op role that can be used to develop new ocp-workload roles. It consists of the following playbooks:
-** Playbook: link:./tasks/pre_workload.yml[pre_workload.yml] - Sets up an
- environment for the workload deployment
-*** Debug task will print out: `pre_workload Tasks completed successfully.`
-
-** Playbook: link:./tasks/workload.yml[workload.yml] - Used to deploy the actual
- workload, i.e, 3scale, Mobile, some Demo or OpenShift customization
-*** This role only prints the current username for which this role is provisioning.
-*** Debug task will print out: `workload Tasks completed successfully.`
-
-** Playbook: link:./tasks/post_workload.yml[post_workload.yml] - Used to
- configure the workload after deployment
-*** This role doesn't do anything here
-*** Debug task will print out: `post_workload Tasks completed successfully.`
-
-** Playbook: link:./tasks/remove_workload.yml[remove_workload.yml] - Used to
- delete the workload
-*** This role doesn't do anything here
-*** Debug task will print out: `remove_workload Tasks completed successfully.`
-
-== Review the defaults variable file
-
-* This file link:./defaults/main.yml[./defaults/main.yml] contains all the variables you need to define to control the deployment of your workload.
-* The variable *ocp_username* is mandatory to assign the workload to the correct OpenShift user.  When the workload is deployed via CloudForms, ocp_username will be overridden by OpenTLC username.
-* A variable *silent=True* can be passed to suppress debug messages.
-* You can modify any of these default values by adding `-e "variable_name=variable_value"` to the command line
-* Add a dictionary for workload parameters.
-
-== Understand how paremeters to your workload should be specified
-
-=== Overview
-
-A `dictionary` approach should be used in order to neatly encapsulate parameters to roles.
-
-The role itself defines a dictionary `<role name>_defaults` in the file link:./defaults/main.yml[./defaults/main.yml]. Because this example role is `ocp-workload-example` the dictionary is called `ocp_workload_example_defaults`. Note that `_` is used instead of `-` in the dictionary name to create a valid Ansible dictionary name.
-
-When deploying a workload you can specify another dictionary with the specific parameters for this deployment. This dictionary should be called `<role name>_vars`. In our example this dictionary would be called `ocp_workload_example_vars`.
-
-=== Handling secret parameters
-
-In case you need to pass a secret parameter (e.g. the Bind Password for an LDAP server) you may define another dictionary, `<role name>_secrets`, and pass that as well.
-
-[TIP]
-When setting default values for secrets in the *defaults* dictionary be careful what you set. `""` is probably a good choice. Some workloads (ocp4-workload-authentication for example) generate passwords if a password is not being specified. If you set a default password in the defaults dictionary this logic will never be executed.
-
-For deployment via AgnosticD/AgnosticV the contents of this secrets dictionary need to be placed on the provisioning host and referenced in the AgnosticV configuration.
-
-=== Combined dictionary
-
-When running your workload the first task in link:./tasks/workload.yml[./tasks/workload.yml] sets up the combined dictionary with name `<role name>`. The defaults are combined with vars and secrets. In that order. This means that values in *defaults* can be overridden with values in *vars* and *secrets*.
-
-When adapting this example role for your particular workload make sure to update the dictionary names in both link:./tasks/workload.yml[./tasks/workload.yml] and link:./tasks/remove_workload.yml[./tasks/remove_workload.yml] files.
+The Quarkus Cafe Role will deploy an event-driven demo application built with Quarkus, AMQ Streams (Kafka), and MongoDB. The application deploys to OpenShift (Kubernetes.)
+The source code for the  [quarkus-cafe-demo](https://github.com/jeremyrdavis/quarkus-cafe-demo) application can be found  [here](https://github.com/jeremyrdavis/quarkus-cafe-demo).
 
 
 === Deploy a Workload with the `ocp-workload-quarkus-cafe-demo-role` playbook [Mostly for testing]
