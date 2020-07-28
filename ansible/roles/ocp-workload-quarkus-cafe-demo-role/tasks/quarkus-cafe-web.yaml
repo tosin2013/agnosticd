@@ -16,8 +16,10 @@
     mode: 0666
   when: deployment_method == "docker"
 
-- name: Create quarkus-cafe-web instance
-  command: "oc create -f {{ config_location }}/quarkus-cafe-web.yaml"
+- name:   Create quarkus-cafe-web instance
+  k8s:
+    state: present
+    src: "{{ config_location }}/quarkus-cafe-web.yaml"
 
 - name: Waiting for quarkus-cafe-web build to complete
   shell: |
@@ -31,11 +33,19 @@
     executable: /bin/bash
 
 - name: Waiting for quarkus-cafe-web deployment
-  shell: |
-    set -o pipefail && oc get pods  | grep Running | grep quarkus-cafe-web | wc -l
-  register: install_status
-  until: "'1' in install_status.stdout"
-  retries: 60
+  k8s_info:
+    kind: Pod
+    label_selectors:
+      - app = quarkus-cafe-web
+    field_selectors:
+      - status.phase=Running
+  register: r_web_status
+  retries: 120
   delay: 15
+  until: r_web_status.resources | list | length == 1
 
+- name: displaying quarkus-cafe-web deployment status
+  debug:
+    var: r_web_status.resources[0].status.phase
+  ignore_errors: false
 

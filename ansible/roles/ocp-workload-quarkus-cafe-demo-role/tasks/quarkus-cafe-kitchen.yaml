@@ -16,8 +16,10 @@
     mode: 0666
   when: deployment_method == "docker"
 
-- name: Create quarkus-cafe-kitchen instance
-  command: "oc create -f {{ config_location }}/quarkus-cafe-kitchen.yaml"
+- name:  Create quarkus-cafe-kitchen instance
+  k8s:
+    state: present
+    src: "{{ config_location }}/quarkus-cafe-kitchen.yaml"
 
 - name: Waiting for quarkus-cafe-kitchen build to complete
   shell: |
@@ -31,13 +33,20 @@
     executable: /bin/bash
 
 - name: Waiting for quarkus-cafe-kitchen deployment
-  shell: |
-    set -o pipefail && oc get pods  | grep Running | grep quarkus-cafe-kitchen | wc -l
-  register: install_status
-  until: "'1' in install_status.stdout"
-  retries: 60
+  k8s_info:
+    kind: Pod
+    label_selectors:
+      - app = quarkus-cafe-kitchen
+    field_selectors:
+      - status.phase=Running
+  register: r_kitchen_status
+  retries: 120
   delay: 15
-  args:
-    executable: /bin/bash
+  until: r_kitchen_status.resources | list | length == 1
+
+- name: displaying quarkus-cafe-kitchen deployment status
+  debug:
+    var: r_kitchen_status.resources[0].status.phase
+  ignore_errors: false
 
 

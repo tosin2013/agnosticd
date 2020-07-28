@@ -40,6 +40,7 @@ items:
       app.kubernetes.io/part-of: quarkus-cafe
       app.openshift.io/runtime-namespace: {{ project_namespace }}
       quarkus-cafe: ""
+    namespace: {{ project_namespace }}
   spec:
     replicas: 1
     selector:

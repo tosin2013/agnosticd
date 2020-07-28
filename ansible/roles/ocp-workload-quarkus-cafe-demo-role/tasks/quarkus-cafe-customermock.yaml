@@ -17,11 +17,14 @@
   when: deployment_method == "docker"
 
 - name: Create quarkus-cafe-customermock instance
-  command: "oc create -f {{ config_location }}/quarkus-cafe-customermock.yaml"
+  k8s:
+    state: present
+    src: "{{ config_location }}/quarkus-cafe-customermock.yaml"
 
 - name: Start quarkus-cafe-customermock build
   command: "oc start-build bc/quarkus-cafe-customermock"
   ignore_errors: yes
+  when: deployment_method == "docker"
 
 - name: Waiting for quarkus-cafe-customermock build to complete
   shell: |
@@ -35,12 +38,18 @@
     executable: /bin/bash
 
 - name: Waiting for quarkus-cafe-customermock deployment
-  shell: |
-    set -o pipefail && oc get pods  | grep Running | grep quarkus-cafe-customermock | wc -l
-  register: install_status
-  until: "'1' in install_status.stdout"
-  retries: 60
+  k8s_info:
+    kind: Pod
+    label_selectors:
+      - app = quarkus-cafe-customermocker
+    field_selectors:
+      - status.phase=Running
+  register: r_customermock_status
+  retries: 120
   delay: 15
-  args:
-    executable: /bin/bash
+  until: r_customermock_status.resources | list | length == 1
 
+- name: displaying quarkus-cafe-customermock deployment status
+  debug:
+    var: r_customermock_status.resources[0].status.phase
+  ignore_errors: false

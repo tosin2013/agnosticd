@@ -3,12 +3,18 @@
   debug:
     msg: "Setting up workload for user ocp_username = {{ ocp_username }}"
 
-- name: Create new project for quarkus-cafe
-  command: "oc new-project {{ project_namespace }}"
-  ignore_errors: yes
-
-- name: Switch to project for quarkus-cafe
-  command:  "oc project {{ project_namespace }}"
+# create codeready namespace
+- name: create quarkus-cafe namespace
+  k8s:
+    state: present
+    kind: Project
+    api_version: project.openshift.io/v1
+    definition:
+      metadata:
+        name: "{{ project_namespace }}"
+        annotations:
+          openshift.io/description: ""
+          openshift.io/display-name: "{{ project_namespace }}"
 
 - name: AMQ Streams installation
   include_tasks: amq-streams-install.yml
