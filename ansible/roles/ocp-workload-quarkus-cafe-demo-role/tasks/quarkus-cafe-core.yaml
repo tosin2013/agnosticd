@@ -1,5 +1,9 @@
 - name: Create mongodb instance
-  command: "oc new-app --name=mongodb --template=mongodb-ephemeral -e MONGODB_USER=mongodb -e MONGODB_PASSWORD=mongodb -e MONGODB_DATABASE=cafedb -e MONGODB_ADMIN_PASSWORD=mongodb -n {{ project_namespace }}"
+  command: >
+    oc new-app --name=mongodb --template=mongodb-ephemeral \
+      -e MONGODB_USER=mongodb -e MONGODB_PASSWORD=mongodb \
+      -e MONGODB_DATABASE=cafedb -e MONGODB_ADMIN_PASSWORD=mongodb \
+      -n {{ project_namespace }}
   changed_when: False
 
 - name: Waiting for mongodb deployment to complete
@@ -37,11 +41,10 @@
     var: r_mongodb_status.resources[0].status.phase
   ignore_errors: false
 
-
 - name: Copying over quarkus-cafe-core application
   template:
     src: templates/docker/quarkus-cafe-core.yaml.j2
-    dest:  "{{ config_location }}/quarkus-cafe-core.yaml"
+    dest: "{{ config_location }}/quarkus-cafe-core.yaml"
     owner: "{{ default_owner }}"
     group: "{{ default_group }}"
     mode: 0666

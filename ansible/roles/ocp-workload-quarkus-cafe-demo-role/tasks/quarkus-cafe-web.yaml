@@ -6,7 +6,7 @@
     group: "{{ default_group }}"
     mode: 0666
 
-- name:   Create quarkus-cafe-web instance
+- name: Create quarkus-cafe-web instance
   k8s:
     state: present
     src: "{{ config_location }}/quarkus-cafe-web.yaml"

@@ -1,7 +1,10 @@
-- name: Create quarkus-cafe-customermock instance
-  k8s:
-    state: present
-    src: "{{ config_location }}/quarkus-cafe-customermock.yaml"
+- name: Copying over quarkus-cafe-customermock application
+  template:
+    src: templates/docker/quarkus-cafe-customermock.yaml.j2
+    dest:  "{{ config_location }}/quarkus-cafe-customermock.yaml"
+    owner: "{{ default_owner }}"
+    group: "{{ default_group }}"
+    mode: 0666
 
 - name: Create quarkus-cafe-customermock instance
   k8s:
