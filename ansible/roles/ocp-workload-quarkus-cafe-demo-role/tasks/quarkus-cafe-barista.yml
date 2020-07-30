@@ -1,39 +1,15 @@
 - name: Copying over quarkus-cafe-barista application
   template:
-    src: templates/s2i/quarkus-cafe-barista.yaml.j2
-    dest:  "{{ config_location }}/quarkus-cafe-barista.yaml"
-    owner: "{{ default_owner }}"
-    group: "{{ default_group }}"
-    mode: 0666
-  when: deployment_method == "s2i"
-
-- name: Copying over quarkus-cafe-barista application
-  template:
     src: templates/docker/quarkus-cafe-barista.yaml.j2
     dest:  "{{ config_location }}/quarkus-cafe-barista.yaml"
     owner: "{{ default_owner }}"
     group: "{{ default_group }}"
     mode: 0666
-  when: deployment_method == "docker"
 
 - name: Create quarkus-cafe-barista instance
   k8s:
     state: present
     src: "{{ config_location }}/quarkus-cafe-barista.yaml"
-
-
-#- name: Wait for quarkus-cafe-barista build 
-#  k8s_info:
-#    kind: Build
-#    label_selectors:
-#      - "app=quarkus-cafe-barista"
-#    field_selectors:
-#      - status.phase=Complete
-#  register: r_barista_build_status
-#  retries: 200
-#  delay: 10
-#  until: r_barista_build_status.resources  | list | length == 1
-#  when: deployment_method == "s2i"
 
 - name: Wait for quarkus-cafe-barista pods
   k8s_info:
@@ -43,7 +19,7 @@
     field_selectors:
       - status.phase=Running
   register: r_barista_status
-  retries: 3
+  retries: 20
   delay: 15
   until: r_barista_status.resources | list | length == 1
 

@@ -1,5 +1,6 @@
 - name: Create mongodb instance
   command: "oc new-app --name=mongodb --template=mongodb-ephemeral -e MONGODB_USER=mongodb -e MONGODB_PASSWORD=mongodb -e MONGODB_DATABASE=cafedb -e MONGODB_ADMIN_PASSWORD=mongodb -n {{ project_namespace }}"
+  changed_when: False
 
 - name: Waiting for mongodb deployment to complete
   k8s_info:
@@ -13,7 +14,8 @@
   delay: 15
   until: r_mongodb_build_status.resources  | list | length == 1
 
-- debug:
+- name: display mongodb build status
+  debug:
     var: r_mongodb_build_status.resources[0].status.phase
   ignore_errors: false
 
@@ -35,14 +37,6 @@
     var: r_mongodb_status.resources[0].status.phase
   ignore_errors: false
 
-- name: Copying over quarkus-cafe-core application
-  template:
-    src: templates/s2i/quarkus-cafe-core.yaml.j2
-    dest:  "{{ config_location }}/quarkus-cafe-core.yaml"
-    owner: "{{ default_owner }}"
-    group: "{{ default_group }}"
-    mode: 0666
-  when: deployment_method == "s2i"
 
 - name: Copying over quarkus-cafe-core application
   template:
@@ -51,23 +45,11 @@
     owner: "{{ default_owner }}"
     group: "{{ default_group }}"
     mode: 0666
-  when: deployment_method == "docker"
 
 - name: Create quarkus-cafe-core instance
   k8s:
     state: present
     src: "{{ config_location }}/quarkus-cafe-core.yaml"
-
-#- name: Waiting for quarkus-cafe-core build to complete
-#  shell: |
-#    set -o pipefail && oc get pods  | grep Completed | grep quarkus-cafe-core | wc -l
-#  register: install_status
-#  when: deployment_method == "s2i"
-#  until: "'2' in install_status.stdout"
-#  retries: 120
-#  delay: 15
-#  args:
-#    executable: /bin/bash
 
 - name: Waiting for quarkus-cafe-core deployment
   k8s_info:

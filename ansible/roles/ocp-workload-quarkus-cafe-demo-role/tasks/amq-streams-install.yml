@@ -25,15 +25,19 @@
   delay: 60
   until: r_amq_crd.resources | list | length == 1
 
+- name: Display AMQ install status
+  debug:
+    var: r_amq_crd.resources[0].status
+
 - name: Setting amq installed fact
   set_fact:
-    amq_installed:  "{{ r_amq_crd.resources[0].status.requirementStatus[0].status }}"
+    amq_installed:  "{{ r_amq_crd.resources[0].status }}"
   ignore_errors: false
 
 - name: fail when AMQ subscription if not ready
   fail:
     msg:  AMQ subscription is not Present on cluster
-  when: amq_installed  != "Present"
+  when: amq_installed is not defined
 
 - name: Copying over Kafka config
   template:
@@ -80,7 +84,6 @@
     owner: "{{ default_owner }}"
     group: "{{ default_group }}"
     mode: 0666
-    
 
 - name: Create kafka topics
   k8s:

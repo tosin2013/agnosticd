@@ -2,7 +2,6 @@
 become_override: False
 ocp_username: wkulhane-redhat.com
 silent: False
-deployment_method: docker #s2i or from docker
 default_owner: "{{ ansible_user }}"
 default_group: "users"
 insecure_skip_tls_verify: true
