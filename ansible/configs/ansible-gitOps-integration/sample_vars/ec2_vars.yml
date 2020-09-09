@@ -12,10 +12,6 @@ tower_version: 3.7.0-4                  # Ansible Tower version
 own_repo_path: http://admin.example.com/repos/tower  # Repository url used for hosts
 repo_version: 3.7.0-4                   # repository version  
 
-frontend_instance_count: 0
-app_instance_count: 0
-appdb_instance_count: 0
-
 
 # Control user settings
 control_user_name: devops
@@ -25,11 +21,9 @@ control_user_ssh_config: ./files/ssh_config.j2
 
 control_user_copy_user_templates:
   - template: ./files/tower_cli.j2
-    resource: tower_cli.cfg
     home: .tower_cli.cfg
 
   - template: ./files/gitconfig.j2
-    resource: gitconfig
     home: .gitconfig
 
 
@@ -52,4 +46,11 @@ gitlab_server_projects:
   - name: osp-infra
     group: ansible
     import_url: https://github.com/miteshget/ansible_advanced_osp_solutions.git
+
+rhte_event: true
+
+### VScoder server variables
+vscode_user_name: "{{ control_user_name }}"
+vscode_server_hostname: "{{ groups['bastions'][0] | regex_replace('\\..*$') }}.{{ guid }}{{ subdomain_base_suffix }}"
+
 ...
