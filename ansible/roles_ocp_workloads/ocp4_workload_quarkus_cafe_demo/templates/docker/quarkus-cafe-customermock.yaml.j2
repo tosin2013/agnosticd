@@ -72,7 +72,7 @@ items:
         - env:
           - name: REST_URL
             value: http://quarkus-cafe-web-{{ project_namespace}}.apps.{{ domain }}
-          image: jeremydavis/quarkus-cafe-customermocker
+          image: jeremydavis/quarkus-cafe-customermocker:2.3.0
           imagePullPolicy: Always
           name: quarkus-cafe-customermocker
           ports:

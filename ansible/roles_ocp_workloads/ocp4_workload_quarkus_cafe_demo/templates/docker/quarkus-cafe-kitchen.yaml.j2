@@ -70,7 +70,7 @@ items:
         - env:
           - name: KAFKA_BOOTSTRAP_URLS
             value: {{ kafka_cluster_name }}-kafka-bootstrap:9092
-          image: jeremydavis/quarkus-cafe-kitchen
+          image: jeremydavis/quarkus-cafe-kitchen:2.4.0
           imagePullPolicy: Always
           name: quarkus-cafe-kitchen
           ports:
