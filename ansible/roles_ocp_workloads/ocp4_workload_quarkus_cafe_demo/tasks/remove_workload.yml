@@ -102,11 +102,12 @@
 - name: Delete amqstreams.v1.5.3 from  project
   k8s:
     state: absent
-    kind: Deployment
+    kind: ClusterServiceVersion
     api_version: apps/v1
     definition:
       metadata:
-        name: amq-streams-cluster-operator-v1.5.3
+        name: operators.coreos.com/v1alpha1
+      namespace: default
 
 # Remove Quarkus cafe project
 # ------------------------------------------
