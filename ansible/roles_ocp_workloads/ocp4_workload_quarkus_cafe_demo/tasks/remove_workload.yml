@@ -102,6 +102,20 @@
 - name: Delete Quarkus Cafe app project
   k8s:
     state: absent
+    kind: ClusterServiceVersion
+    api_version: operators.coreos.com/v1alpha1
+    definition:
+      metadata:
+        name: "{{ amqstartingCSV }}"
+        annotations:
+          operators.openshift.io/valid-subscription: '["Red Hat Integration", "Red Hat AMQ"]'
+          apiVersion: operators.coreos.com/v1alpha1
+
+# Remove Quarkus cafe project
+# ------------------------------------------
+- name: Delete Quarkus Cafe app project
+  k8s:
+    state: absent
     kind: Project
     api_version: project.openshift.io/v1
     definition:
