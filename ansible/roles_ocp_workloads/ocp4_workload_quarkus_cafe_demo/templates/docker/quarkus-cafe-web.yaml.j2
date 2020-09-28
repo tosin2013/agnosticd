@@ -74,6 +74,8 @@ items:
             value: http://quarkus-cafe-web-{{ project_namespace}}.apps.{{ domain }}
           - name: STREAM_URL
             value: {{ kafka_stream_url }}
+          - name: CORS_ORIGINS
+            value: {{ cors_origin }}
           - name: KAFKA_BOOTSTRAP_SERVERS
             value: {{ kafka_cluster_name }}-kafka-bootstrap:9092
           image: jeremydavis/quarkus-cafe-web:2.4.0

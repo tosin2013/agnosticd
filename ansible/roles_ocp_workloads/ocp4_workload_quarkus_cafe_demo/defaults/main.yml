@@ -15,3 +15,4 @@ quarkus_build_cpu_limit: 1 # Default 1
 quarkus_core_build_memory_limit:  8Gi # Default 8Gi
 quarkus_image_stream_name: ubi-quarkus-native-s2i:20.0.0-java11
 kafka_stream_url: http://quarkus-cafe-web-{{ project_namespace }}.apps.{{ domain }}/dashboard/stream
+cors_origin: http://quarkus-cafe-web-{{ project_namespace }}.apps.{{ domain }}
