@@ -112,6 +112,7 @@
           certified: 'false'
           repository: 'https://github.com/strimzi/strimzi-kafka-operator'
           support: Red Hat
+          olm.operatorNamespace: openshift-operators
 
 # Remove Quarkus cafe project
 # ------------------------------------------
