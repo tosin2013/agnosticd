@@ -99,14 +99,24 @@
 
 # Remove Quarkus cafe project
 # ------------------------------------------
-- name: Delete Quarkus Cafe app project
+- name: Delete amqstreams.v1.5.3 from  project
   k8s:
     state: absent
     kind: ClusterServiceVersion
     api_version: operators.coreos.com/v1alpha1
     definition:
       metadata:
-        name: "{{ amqstartingCSV }}"
+        name: amqstreams.v1.5.3
+
+- name: Delete kafkas.kafka.strimzi.io from  project
+  k8s:
+    state: absent
+    kind: ClusterServiceVersion
+    api_version: operators.coreos.com/v1alpha1
+    definition:
+      metadata:
+        name: kafkas.kafka.strimzi.io
+
 
 # Remove Quarkus cafe project
 # ------------------------------------------
