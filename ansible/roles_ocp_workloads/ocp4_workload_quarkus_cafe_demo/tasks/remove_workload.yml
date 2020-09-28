@@ -97,17 +97,21 @@
     src: "{{ config_location }}/amq-sub.yaml"
   ignore_errors: yes
 
-# Remove Quarkus cafe project
+- name: Copying over amqstreams.v1.5.3 for deletion
+  template:
+    src: templates/amqstreams.v1.5.3.yaml.j2
+    dest:  "{{ config_location }}/amqstreams.v1.5.3.yaml"
+    owner: "{{ default_owner }}"
+    group: "{{ default_group }}"
+    mode: 0666
+
+# Remove amqstreams.v1.5.3 
 # ------------------------------------------
 - name: Delete amqstreams.v1.5.3 from  project
   k8s:
     state: absent
-    kind: ClusterServiceVersion
-    api_version: apps/v1
-    definition:
-      metadata:
-        name: operators.coreos.com/v1alpha1
-      namespace: default
+    src: "{{ config_location }}/amqstreams.v1.5.3.yaml"
+  ignore_errors: yes
 
 # Remove Quarkus cafe project
 # ------------------------------------------
