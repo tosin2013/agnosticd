@@ -19,7 +19,7 @@
     kind: ClusterServiceVersion
     namespace: "{{ project_namespace }}"
     field_selectors:
-      - metadata.name=amqstreams.v1.5.2
+      - metadata.name={{ amqstartingCSV }}
   register: r_amq_crd
   retries: 20
   delay: 60
