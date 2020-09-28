@@ -107,9 +107,6 @@
     definition:
       metadata:
         name: "{{ amqstartingCSV }}"
-        annotations:
-          operators.openshift.io/valid-subscription: '["Red Hat Integration", "Red Hat AMQ"]'
-          apiVersion: operators.coreos.com/v1alpha1
 
 # Remove Quarkus cafe project
 # ------------------------------------------
