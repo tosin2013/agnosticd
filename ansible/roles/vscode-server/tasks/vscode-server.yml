@@ -35,6 +35,7 @@
     url: "https://gpte-public.s3.amazonaws.com/vscode-plugins/{{ __default_extension }}"
     dest: /home/{{ vscode_user_name }}/.local/share/code-server/extensions/
     validate_certs: no
+    owner: "{{ vscode_user_name }}"
   loop: "{{ vscode_server_default_extensions }}"
   loop_control:
     loop_var: __default_extension
@@ -45,13 +46,15 @@
     url: "{{ __additional_extension }}"
     dest: /home/{{ vscode_user_name }}/.local/share/code-server/extensions/
     validate_certs: no
+    owner: "{{ vscode_user_name }}"
   loop: "{{ vscode_server_extension_urls }}"
   loop_control:
     loop_var: __additional_extension
 
 - name: List vscode extensions
-  command: >-
-    ls /home/{{ vscode_user_name }}/.local/share/code-server/extensions/
+  shell: >-
+    ls /home/{{ vscode_user_name }}/.local/share/code-server/extensions/ 
+    | grep ".vsix"
   register: vscode_extensions
 
 - name: install vscode extensions

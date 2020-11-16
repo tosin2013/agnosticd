@@ -89,7 +89,7 @@
     - name: Ensure NFS share is mounted
       mount:
         path: "/software"
-        src: "bastion.{{ guid }}.internal:/nfs"
+        src: "{{ bastion_hostname }}:/nfs"
         fstype: nfs4
         opts: "rw,bg,hard,_netdev"
         state: mounted
@@ -105,6 +105,11 @@
     - name: Ensure Python3 package is installed and alternatives for python updated
       shell: >
         yum install -y python3 && alternatives --set python /usr/bin/python3
+
+    - name: Ensure EPEL GPG is installed
+      rpm_key:
+        state: present
+        key: "{{ ansible_tower_epel_gpg_download_url }}"
 
     - name: Install Anisble Tower
       include_role:
