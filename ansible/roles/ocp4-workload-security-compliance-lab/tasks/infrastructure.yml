@@ -9,6 +9,7 @@
   yum:
     name:
       - podman 
+      - slirp4netns
       - openscap-utils
       - openscap-scanner
       - scap-security-guide
@@ -50,26 +51,21 @@
   register: reg_result
   delegate_to: "{{ bastion_internal }}"
 
-
-# Example showing how to end the play for specific targets
-- name: End the play for hosts that run CentOS 6
-  meta: end_host
-
-- name: Enable / restart podman
-  service: 
-    name: podman
-    enabled: yes
-    state: restarted
-  delegate_to: "{{ bastion_internal }}"
+#- name: Enable / restart podman
+#  service: 
+#    name: podman
+#    enabled: yes
+#    state: restarted
+#  delegate_to: "{{ bastion_internal }}"
 
 
-- name: Allow group to use oscap-docker without sudo password
-  lineinfile:
-    dest: /etc/sudoers
-    line: "%docker ALL=NOPASSWD: /usr/bin/oscap-docker"
-    validate: '/usr/sbin/visudo -cf %s'
-  become: true
-  delegate_to: "{{ bastion_internal }}"
+#- name: Allow group to use oscap-docker without sudo password
+#  lineinfile:
+#    dest: /etc/sudoers
+#    line: "%docker ALL=NOPASSWD: /usr/bin/oscap-docker"
+#    validate: '/usr/sbin/visudo -cf %s'
+#  become: true
+#  delegate_to: "{{ bastion_internal }}"
 
 - name: Create custom jenkins image
   shell: |

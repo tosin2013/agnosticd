@@ -24,7 +24,7 @@ user_gogs_password: "openshift"
 
 che_project: "che-workspaces"
 
-repo_url: https://github.com/RedHatDemos/SecurityDemos.git
+repo_url: https://github.com/tosin2013/SecurityDemos.git
 reponame_local: SecurityDemos
 reponame: SecurityDemos
 demoapp_location: 2019Labs/ProactiveSecurityCompliance/OpenShiftSecurityPipeline/spring-boot-angular-ecommerce
