@@ -14,6 +14,17 @@
       - scap-security-guide
       - atomic
   delegate_to: "{{ bastion_internal }}"
+  when: ansible_distribution == "RedHat" and ansible_distribution_major_version > '7'
+
+- name: Install OpenSCAP tools
+  yum:
+    name:
+      - podman 
+      - openscap-utils
+      - openscap-scanner
+      - scap-security-guide
+  delegate_to: "{{ bastion_internal }}"
+  when: ansible_distribution == "RedHat" and ansible_distribution_major_version > '8'
 
 - name: Ensure docker group exists
   group:
