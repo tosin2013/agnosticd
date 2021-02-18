@@ -8,27 +8,15 @@
 - name: Install OpenSCAP tools
   yum:
     name:
-      - docker 
-      - openscap-utils
-      - openscap-scanner
-      - scap-security-guide
-      - atomic
-  delegate_to: "{{ bastion_internal }}"
-  when: ansible_distribution == "RedHat" and ansible_distribution_major_version > '7'
-
-- name: Install OpenSCAP tools
-  yum:
-    name:
       - podman 
       - openscap-utils
       - openscap-scanner
       - scap-security-guide
   delegate_to: "{{ bastion_internal }}"
-  when: ansible_distribution == "RedHat" and ansible_distribution_major_version > '8'
 
-- name: Ensure docker group exists
+- name: Ensure podman group exists
   group:
-    name: docker
+    name: podman
     state: present
   delegate_to: "{{ bastion_internal }}"
 
@@ -53,20 +41,27 @@
   set_fact:
     ocp_registry_route: "{{ image_route.stdout }}"
 
-- name: Add exposed registry as insecure
+- name: add exposed registry as insecure
   template:
-    src: daemon.json.j2
-    dest: /etc/docker/daemon.json
+    src: registries.conf.j2
+    dest: /etc/containers/registries.conf
     mode: '0644'
     backup: yes
+  register: reg_result
   delegate_to: "{{ bastion_internal }}"
 
-- name: Enable / restart docker
+
+# Example showing how to end the play for specific targets
+- name: End the play for hosts that run CentOS 6
+  meta: end_host
+
+- name: Enable / restart podman
   service: 
-    name: docker
+    name: podman
     enabled: yes
     state: restarted
   delegate_to: "{{ bastion_internal }}"
+
 
 - name: Allow group to use oscap-docker without sudo password
   lineinfile:
