@@ -2,6 +2,7 @@
 # PROVIDED BY THE INFRA
 # Uncomment and set a value to take effect. Else, will use the defaults
 admin_project: ocp-workshop
+project_admin: opentlc-mgr
 user_count_start: 1
 num_users: 5 
 #user_format: user%02d
@@ -54,9 +55,9 @@ openshift_cli: oc
 
 
 ###### gogs defaults
-gogs_image_version: 0.11.29
+gogs_image_version: 0.11.91
 
-gogs_route: gogs-{{ project_name }}.127.0.0.1.nip.io
+gogs_route: gogs-gogs.{{ ocp_apps_domain }}
 
 gogs_admin_user: gogs
 gogs_admin_password: gogs

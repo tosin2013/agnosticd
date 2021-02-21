@@ -14,6 +14,7 @@
       - openscap-scanner
       - scap-security-guide
   delegate_to: "{{ bastion_internal }}"
+  ignore_errors: true 
 
 - name: Ensure podman group exists
   group:
@@ -137,7 +138,7 @@
   set_fact:
     gogs_project_name: "{{ admin_project }}"
     gogs_route: "{{ gogs_hostname }}"
-    gogs_image_version: 0.11.34
+    gogs_image_version:  "{{ gogs_image_version }}"
     gogs_admin_user: "{{ user_gogs_admin }}"
     gogs_admin_password: "{{ user_gogs_password }}"
     gogs_user: "{{ user_gogs_user }}"

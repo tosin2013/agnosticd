@@ -39,15 +39,28 @@
   ignore_errors: true
   tags: always
 
+# Remove quay-operator project
+- name: Create openshift quay objects
+  command: "{{ openshift_cli }} delete -f {{ item }}"
+  args:
+    chdir: "{{ tmp_dir }}/quay-operator"
+  with_items:
+    - config/samples/managed.quayregistry.yaml
+    - deploy/quay-operator.subscription.yaml
+    - deploy/quay-operator.operatorgroup.yaml
+    - deploy/quay-operator.catalogsource.yaml
+
+# Remove noobaa
+- name: remove openshift noobaa
+  command: "create -n openshift-storage -f {{ item }}"
+  args:
+    chdir: "{{ tmp_dir }}/quay-operator"
+  with_items:
+    - ./kustomize/components/objectstorage/quay-datastore.noobaa.yaml
+
 # Remove quay-enterprise project
 - name: Delete quay-enterprise project
   command: oc delete project quay-enterprise
-  ignore_errors: true
-  tags: always
-
-# Remove quay-mysql project
-- name: Delete quay-mysql project
-  command: oc delete project quay-mysql
   ignore_errors: true
   tags: always
 
