@@ -49,7 +49,7 @@
   when: clean_deploy|bool or install_gogs_fact == ""
   
 # create gogs users
-#- import_tasks: create_gogs_users.yml
+- import_tasks: create_gogs_users.yml
 
 - name: remove existing gogs if clean deploy requested
   shell: |
