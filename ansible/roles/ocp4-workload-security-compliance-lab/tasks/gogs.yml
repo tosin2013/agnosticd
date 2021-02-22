@@ -41,7 +41,7 @@
   ignore_errors: true
   changed_when: false
 
-- name: Setting host facts using complex arguments
+- name: Setting gogs is installed fact
   set_fact:
     install_gogs_fact: "{{ install_gogs.stdout }}"
 

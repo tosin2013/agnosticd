@@ -109,3 +109,9 @@ nexus_admin_user: admin
 nexus_admin_password: admin123
 
 ocp_registry_route: unset
+
+## sonarqube info 
+sonarqube_project_name: sonarqube
+sonarqube_project_display_name: SonarQube
+sonarqube_project_desc: Code Quality and Code Security
+sonarqube_service_name: sonarqube
