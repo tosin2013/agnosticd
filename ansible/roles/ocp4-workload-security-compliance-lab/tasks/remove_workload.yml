@@ -41,14 +41,20 @@
 
 # Remove quay-operator project
 - name: Create openshift quay objects
-  command: "{{ openshift_cli }} delete -f {{ item }}"
+  command: "{{ openshift_cli }} delete -f {{ item }} -n quay-enterprise"
   args:
     chdir: "{{ tmp_dir }}/quay-operator"
   with_items:
-    - config/samples/managed.quayregistry.yaml
-    - deploy/quay-operator.subscription.yaml
-    - deploy/quay-operator.operatorgroup.yaml
-    - deploy/quay-operator.catalogsource.yaml
+    - ./config/samples/managed.quayregistry.yaml
+    - ./deploy/quay-operator.subscription.yaml
+    - ./deploy/quay-operator.operatorgroup.yaml 
+  ignore_errors: true
+
+- name: Create openshift quay objects
+  command: "{{ openshift_cli }} delete -f ./deploy/quay-operator.catalogsource.yaml -n openshift-marketplace"
+  args:
+    chdir: "{{ tmp_dir }}/quay-operator"
+  ignore_errors: true
 
 # Remove noobaa
 - name: remove openshift noobaa
@@ -57,7 +63,8 @@
     chdir: "{{ tmp_dir }}/quay-operator"
   with_items:
     - ./kustomize/components/objectstorage/quay-datastore.noobaa.yaml
-
+  ignore_errors: true
+  
 # Remove quay-enterprise project
 - name: Delete quay-enterprise project
   command: oc delete project quay-enterprise

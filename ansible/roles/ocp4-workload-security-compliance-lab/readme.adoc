@@ -55,7 +55,7 @@ WORKLOAD="ocp4-workload-security-compliance-lab"
 GUID=fb78
 CITY=raleigh
 DOMAIN="$CITY-$GUID.example.opentlc.com"
-TARGET_HOST="bastion.atlanta-936d.example.opentlc.com"
+TARGET_HOST="bastion.$CITY-$GUID.example.opentlc.com"
 CLUSTER_DOMAIN="cluster-$CITY-$GUID.$DOMAIN"
 APPS_DOMAIN="apps.$CLUSTER_DOMAIN"
 MASTER_HOSTNAME="console-openshift-console.$APPS_DOMAIN"
@@ -64,11 +64,7 @@ SSH_USER="ec2-user"
 SSH_PRIVATE_KEY="fb78key.pem"
 USER_PASSWORD="r3dh4t1!"
 GOGS_PASSWORD="openshift"
-NUM_USERS=3
-# Retrieve QUAY password here: https://access.redhat.com/solutions/3533201
-QUAY_PULL_USERNAME=UPDATE_ME
-QUAY_PULL_PASSWORD=UPDATE_ME
-
+NUM_USERS=5
 ----
 
 
@@ -84,7 +80,10 @@ ansible-playbook -i ${TARGET_HOST}, ./configs/ocp-workloads/ocp-workload.yml \
                  -e"ocp_username=${OCP_USERNAME}" \
                  -e"ocp_workload=${WORKLOAD}" \
                  -e"guid=${GUID}" \
+                 -e"bastion_internal=${TARGET_HOST}" \
                  -e"ocp_user_needs_quota=true" \
+                 -e"gogs_project_name=gogs" \
+                 -e"nexus_project_name=nexus" \
                  -e"ocp_master=${MASTER_HOSTNAME}" \
                  -e"ocp_apps_domain=${APPS_DOMAIN}" \
                  -e"admin_project=${WORKSHOP_PROJECT}" \
@@ -92,8 +91,7 @@ ansible-playbook -i ${TARGET_HOST}, ./configs/ocp-workloads/ocp-workload.yml \
                  -e"user_password=${USER_PASSWORD}" \
                  -e"gogs_password=${GOGS_PASSWORD}" \
                  -e"quay_pull_password=$QUAY_PULL_PASSWORD}" \
-                 -e"ACTION=create"
-
+                 -e"ACTION=create" -vv
 ----
 
 === To Delete an environment
