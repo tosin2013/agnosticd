@@ -79,6 +79,21 @@
   ignore_errors: true
   tags: always
 
+- name: delete sonarqube application 
+  command: oc delete all --selector app=sonarqube -n {{ sonarqube_project_name }}
+  ignore_errors: true
+
+# Remove sonarqube project
+- name: Delete sonarqube project
+  command: oc delete project {{ sonarqube_project_name }}
+  ignore_errors: true
+  tags: always
+
+# Remove nexus project
+- name: Delete nexus project
+  command: oc delete project nexus
+  ignore_errors: true
+  tags: always
 
 # Remove quay-enterprise project
 - name: Delete quay-enterprise project
