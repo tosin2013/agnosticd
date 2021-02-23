@@ -30,6 +30,7 @@
     {{ openshift_cli }} new-app -fhttps://raw.githubusercontent.com/tosin2013/sonarqube-openshift-docker/master/sonarqube-postgresql-template.yaml \
         --param=SONARQUBE_VERSION={{sonarqube_version}} \
         -n {{ sonarqube_project_name }}
+  ignore_errors: true
   when: not ephemeral|bool
 
 - name: deploy sonarqube from template (ephemeral)
@@ -37,6 +38,7 @@
     {{ openshift_cli }} new-app -f https://raw.githubusercontent.com/tosin2013/sonarqube-openshift-docker/master/sonarqube-template.yaml \
         --param=SONARQUBE_VERSION={{sonarqube_version}} \
         -n {{ sonarqube_project_name }}
+  ignore_errors: true
   when: ephemeral|bool
 
 - name: wait for sonarqube  to be running
