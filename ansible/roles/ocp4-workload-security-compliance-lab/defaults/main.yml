@@ -111,6 +111,7 @@ nexus_admin_password: admin123
 ocp_registry_route: unset
 
 ## sonarqube info 
+sonarqube_version: 8.7.0.41497
 sonarqube_project_name: sonarqube
 sonarqube_project_display_name: SonarQube
 sonarqube_project_desc: Code Quality and Code Security
