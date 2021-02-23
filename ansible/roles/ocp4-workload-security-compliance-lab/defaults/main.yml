@@ -116,3 +116,5 @@ sonarqube_project_name: sonarqube
 sonarqube_project_display_name: SonarQube
 sonarqube_project_desc: Code Quality and Code Security
 sonarqube_service_name: sonarqube
+sonarqube_deploy_retry_count: 60
+sonarqube_deploy_retry_delay: 10
