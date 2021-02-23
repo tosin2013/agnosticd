@@ -91,7 +91,7 @@
   when: noobaa_fact != "'1'"
 
 - name: Create QuayRegistry instance
-  command: "{{ openshift_cli }} create -f config/samples/managed.quayregistry.yaml"
+  command: "{{ openshift_cli }} create -f config/samples/managed.quayregistry.yaml  -n quay-enterprise"
   args:
     chdir: "{{ tmp_dir }}/quay-operator"
 
@@ -101,3 +101,6 @@
   until: result.stdout.find("Running") != -1
   retries: 30
   delay: 10
+
+- name: End the play for hosts that run CentOS 6
+  meta: end_host
