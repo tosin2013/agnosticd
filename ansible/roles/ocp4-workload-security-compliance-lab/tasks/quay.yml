@@ -1,6 +1,6 @@
 ---
 - name: check if OpenShift Container Storage exists
-  shell: "{{ openshift_cli }} project {{ gogs_project_name }}"
+  shell: "{{ openshift_cli }} project openshift-storage"
   register: storage_result
   ignore_errors: true
   changed_when: false
@@ -38,7 +38,7 @@
     version: master
 
 - name: Create openshift quay objects
-  command: "{{ openshift_cli }} create -f {{ item }}"
+  command: "{{ openshift_cli }} create -f {{ item }} -n openshift-marketplace"
   args:
     chdir: "{{ tmp_dir }}/quay-operator"
   with_items:
@@ -74,7 +74,7 @@
    noobaa_fact: "{{ noobaa_result.stdout }}"
 
 - name: Create NooBaa object in openshift-storage namespace
-  command: "{{ openshift_cli }} create -f config/samples/managed.quayregistry.yaml"
+  command: "{{ openshift_cli }} create -f kustomize/components/objectstorage/quay-datastore.noobaa.yaml -n openshift-storage"
   args:
     chdir: "{{ tmp_dir }}/quay-operator"
   when: noobaa_fact != "'1'"
