@@ -65,8 +65,8 @@ gogs_admin_password: gogs
 gogs_user: developer
 gogs_password: developer
 
-gogs_generate_user_count: 0
-gogs_generate_user_format: user%02d
+gogs_generate_user_count: "{{ user_count }}"
+gogs_generate_user_format:  user%d
 
 gogs_project_name: gogs
 gogs_project_display_name: Gogs

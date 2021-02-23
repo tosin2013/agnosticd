@@ -110,6 +110,23 @@
 
     # Clone required project in Gogs
     #
+    - name: check gogs token for "{{ my_user }}"
+      uri:
+        url: http://gogs-gogs.{{ocp_apps_domain}}/api/v1/users/{{ my_user }}/tokens
+        method: POST
+        body: '{"name": "token", "private": false}'
+        body_format: json
+        user: "{{ my_user }}"
+        password: "{{ user_gogs_password }}"
+        force_basic_auth: true
+        status_code: 200,201
+      register: token_result
+      tags: gogs
+
+
+    - name: Setting host facts using complex arguments
+      set_fact:
+        token_fact: "{{ token_result.json.sha1  }}"
 
     - name: check if repository exists in git for user "{{ my_user }}"
       uri:
@@ -125,15 +142,15 @@
       uri:
         url: http://gogs-gogs.{{ocp_apps_domain}}/api/v1/user/repos
         method: POST
-        body: '{"name": "{{ reponame_local }}", "private": false}'
+        headers:
+          Content-Type: application/json
+          Authorization: token {{ token_fact }}
+        body: '{"name": "{{ reponame_local }}", "description": "This is your first repository", "private": false}'
         body_format: json
-        user: "{{ my_user }}"
-        password: "{{ user_gogs_password }}"
         status_code: 200,201
-        force_basic_auth: true
       when: repo_result.status != 200
       tags: gogs
-
+    
     - name: Update the pom.xml file
       replace:
         path: "{{ git_dir.path }}/{{ reponame }}/{{ demoapp_location }}/pom.xml"
