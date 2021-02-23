@@ -57,7 +57,7 @@
 
 # Remove noobaa
 - name: remove openshift noobaa
-  command: "{{ openshift_cli }} delete  -n openshift-storage -f {{ item }} -n openshift-storage"
+  command: "{{ openshift_cli }} delete  -n openshift-storage -f {{ item }}"
   args:
     chdir: "{{ tmp_dir }}/quay-operator"
   with_items:
