@@ -71,9 +71,13 @@
         mode: '0644'
 
     - name: Create build template
-      command: "{{ openshift_cli }} create -f {{tmp_dir}}/files/buildconfig.yaml -n {{ my_user }}"
+      command: "{{ openshift_cli }} create -f {{tmp_dir}}/files/{{ item }} -n {{ my_user }}"
       tags: always
       ignore_errors: true
+      loop:
+        - buildconfig.yaml
+        - hardening-buildconfig.yaml
+
 
     - name: Create jenkins pipeline
       #command: "{{ openshift_cli }} new-app ecommerce-build-template -p GUID={{ guid }} -p GOGS_USER={{ my_user }} -p SSH_PASSWORD={{ user_password }} -n {{ my_user }}"
