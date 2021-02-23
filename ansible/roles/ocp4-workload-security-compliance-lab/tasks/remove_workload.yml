@@ -32,14 +32,6 @@
   with_sequence: start={{user_count_start}} end={{ user_count_end }} format={{ user_format }}
   tags: always
 
-# Remove OpenShift Container Storage
-- name: Delete OpenShift Container Storage
-  command: "{{ openshift_cli }} delete -f {{ item }}"
-  args:
-    chdir: "{{ tmp_dir }}"
-  with_items:
-    - openshift-storage-operator.yml
-
 # Remove che main project
 - name: Delete che main project
   command: "oc delete project {{ che_project }}"
@@ -65,13 +57,29 @@
 
 # Remove noobaa
 - name: remove openshift noobaa
-  command: "create -n openshift-storage -f {{ item }}"
+  command: "{{ openshift_cli }} delete  -n openshift-storage -f {{ item }}"
   args:
     chdir: "{{ tmp_dir }}/quay-operator"
   with_items:
     - ./kustomize/components/objectstorage/quay-datastore.noobaa.yaml
   ignore_errors: true
-  
+
+# Remove OpenShift Container Storage
+- name: Delete OpenShift Container Storage
+  command: "{{ openshift_cli }} delete -f {{ item }}"
+  args:
+    chdir: "{{ tmp_dir }}"
+  with_items:
+    - openshift-storage-operator.yml
+  ignore_errors: true
+
+# Remove gogs project
+- name: Delete gogs project
+  command: oc delete project gogs
+  ignore_errors: true
+  tags: always
+
+
 # Remove quay-enterprise project
 - name: Delete quay-enterprise project
   command: oc delete project quay-enterprise
