@@ -55,23 +55,6 @@
     chdir: "{{ tmp_dir }}/quay-operator"
   ignore_errors: true
 
-# Remove noobaa
-- name: remove openshift noobaa
-  command: "{{ openshift_cli }} delete  -n openshift-storage -f {{ item }}"
-  args:
-    chdir: "{{ tmp_dir }}/quay-operator"
-  with_items:
-    - ./kustomize/components/objectstorage/quay-datastore.noobaa.yaml
-  ignore_errors: true
-
-# Remove OpenShift Container Storage
-- name: Delete OpenShift Container Storage
-  command: "{{ openshift_cli }} delete -f {{ item }}  -n openshift-storage"
-  args:
-    chdir: "{{ tmp_dir }}"
-  with_items:
-    - openshift-storage-operator.yml
-  ignore_errors: true
 
 # Remove gogs project
 - name: Delete gogs project
@@ -116,6 +99,24 @@
     - "role=jenkins-slave"
   ignore_errors: true
   tags: always
+
+# Remove noobaa
+#- name: remove openshift noobaa
+#  command: "{{ openshift_cli }} delete  -n openshift-storage -f {{ item }}"
+#  args:
+#    chdir: "{{ tmp_dir }}/quay-operator"
+#  with_items:
+#    - ./kustomize/components/objectstorage/quay-datastore.noobaa.yaml
+#  ignore_errors: true
+
+# Remove OpenShift Container Storage
+- name: Delete OpenShift Container Storage
+  command: "{{ openshift_cli }} delete -f {{ item }}  -n openshift-storage"
+  args:
+    chdir: "{{ tmp_dir }}"
+  with_items:
+    - openshift-storage-operator.yml
+  ignore_errors: true
 
 #
 #####
