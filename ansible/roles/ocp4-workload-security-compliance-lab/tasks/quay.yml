@@ -10,7 +10,7 @@
     storage_result: "{{ storage_result.stdout }}"
 
 - name: Create OpenShift Container Storage
-  command: "{{ openshift_cli }} create -f {{ item }}"
+  command: "{{ openshift_cli }} create -f {{ item }}" -n openshift-storage 
   args:
     chdir: "{{ tmp_dir }}"
   with_items:
