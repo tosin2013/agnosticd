@@ -55,7 +55,7 @@
     executable: /bin/bash
 
 - name: Create openshift quay objects
-  command: "{{ openshift_cli }} create -f {{ item }}"
+  command: "{{ openshift_cli }} create -f {{ item }} -n quay-enterprise"
   args:
     chdir: "{{ tmp_dir }}/quay-operator"
   with_items:
@@ -101,6 +101,3 @@
   until: result.stdout.find("Running") != -1
   retries: 30
   delay: 10
-
-- name: End the play for hosts that run CentOS 6
-  meta: end_host
