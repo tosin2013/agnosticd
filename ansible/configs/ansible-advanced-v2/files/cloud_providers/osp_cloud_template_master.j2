@@ -45,8 +45,6 @@ resources:
       name: "{{ guid }}-{{ network['name'] }}-router"
       external_gateway_info:
         network: "{{ provider_network }}"
-        external_fixed_ips:
-        - subnet: "{{ osp_public_subnet }}"
 
   {{ network['name'] }}-router_private_interface:
     type: OS::Neutron::RouterInterface
@@ -54,6 +52,17 @@ resources:
       router: {get_resource: {{ network['name'] }}-router}
       subnet: {get_resource: {{ network['name'] }}-subnet}
 {% endif %}
+
+{% if network['create_router'] == false %}
+{% if network['router_name'] is defined %}
+  {{ network['name'] }}-router_private_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: {get_resource: {{ network['router_name'] }}-router}
+      subnet: {get_resource: {{ network['name'] }}-subnet}
+{% endif %}
+{% endif %}
+
 {% endfor %}
 
   ###################
@@ -134,7 +143,8 @@ resources:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network: {{ provider_network }}
-      floating_subnet: "{{ osp_public_subnet }}"
+    depends_on:
+      - {{ instance['network'] | default('default') }}-router_private_interface
 
   fip_association_{{ iname }}:
     type: OS::Neutron::FloatingIPAssociation
@@ -210,17 +220,16 @@ resources:
 {% endfor %}
 
 {% if additional_fips | default( '' ) | length > 0 %}
-{%   for fipname in additional_fips %}
+{% for fipname in additional_fips %}
   {{ fipname }}:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network: "{{ additional_fips[fipname].network }}"
-      floating_subnet: "{{ osp_public_subnet }}"
-{%     if additional_fips[fipname].description is defined %}
+{% if additional_fips[fipname].description is defined %}
       value_specs:
         description: "{{ additional_fips[fipname].description }}"
-{%     endif %}
-{%   endfor %}
+{% endif %}
+{% endfor %}
 {% endif %}
 
 outputs:
