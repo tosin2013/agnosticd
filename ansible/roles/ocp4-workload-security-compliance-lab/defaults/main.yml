@@ -8,11 +8,11 @@ num_users: 5
 #user_format: user%02d
 user_format: user%d
 user_password: "openshift"
-ocp_bastion: "bastion.{{ guid }}{{ subdomain_base_suffix }}"
+ocp_bastion: "bastion.{{ guid }}{{ ocp_apps_domain }}"
 bastion_internal: "bastion.{{ guid }}.internal"
 
-ocp_master: "master.{{ guid }}{{ subdomain_base_suffix }}"
-ocp_apps_domain: apps.{{ guid }}{{ subdomain_base_suffix }}
+ocp_master: "master.{{ guid }}{{ ocp_apps_domain }}"
+ocp_apps_domain: apps.{{ guid }}{{ ocp_apps_domain }}
 ocp_user_needs_quota: "false"
 user_count: "{{ num_users }}"
 
