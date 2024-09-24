@@ -8,14 +8,14 @@ version: "3"
 services:
 
   web:
-    image: docker.io/nginx
+    image: {{ showroom_nginx_image }}:{{ showroom_nginx_image_tag }}
     container_name: web
     hostname: web
     command: nginx -g "daemon off;"
     ports:
       - "8000:80"
     volumes:
-      - "{{ showroom_user_home_dir }}/content/gh-pages:/usr/share/nginx/html:Z"
+      - "{{ showroom_user_home_dir }}/content/www:/usr/share/nginx/html:Z"
 
 {% for service in showroom_tab_services %}
 {% macro fake_indent_op() %}

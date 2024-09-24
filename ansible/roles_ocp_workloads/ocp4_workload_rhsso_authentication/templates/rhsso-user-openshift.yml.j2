@@ -1,3 +1,4 @@
+---
 apiVersion: keycloak.org/v1alpha1
 kind: KeycloakUser
 metadata:
@@ -15,10 +16,16 @@ spec:
       app.kubernetes.io/name: rhsso-openshift
   user:
     credentials:
-      - temporary: false
-        type: password
-        value: {{ password }}
+    - temporary: false
+      type: password
+      value: {{ password }}
     username: {{ username }}
-    email: {{ username }}@opentlc.com
+    email: {{ username }}@demo.redhat.com
     enabled: true
     emailVerified: true
+    {% if ocp4_workload_rhsso_authentication_openshift_realm_roles is defined -%}
+    realmRoles:
+    {% for role in ocp4_workload_rhsso_authentication_openshift_realm_roles -%}
+    - {{ role }}
+    {%- endfor %}
+    {%- endif %}

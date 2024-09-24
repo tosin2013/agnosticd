@@ -20,7 +20,7 @@
   delay: 10
 
 - name: Set common password for ArgoCD
-  k8s:
+  kubernetes.core.k8s:
     validate_certs: false
     state: present
     definition:
@@ -30,13 +30,13 @@
         namespace: "{{ item }}"
         name: argocd-cluster
       data:
-        admin.password: "{{ common_password | b64encode }}"
+        admin.password: "{{ ocp4_workload_redhat_developer_hub_bootstrap_argocd_password | b64encode }}"
   loop:
     - openshift-gitops
     - janus-argocd
 
 - name: Wait until default project is ready
-  k8s_info:
+  kubernetes.core.k8s_info:
     api_version: argoproj.io/v1alpha1
     kind: AppProject
     name: default
