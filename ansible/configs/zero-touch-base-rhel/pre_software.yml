@@ -111,7 +111,7 @@
         name: asset_injector
 
 - name: Setup legacy systems
-  hosts: all
+  hosts: all:!bastions
   become: true
   tasks:
     - name: Setup ssh for showroom_ssh_host
@@ -188,8 +188,21 @@
   become: true
   tasks:
     - name: Configure Satellites
-      ansible.bultin.include_role:
+      ansible.builtin.include_role:
         name: ansible_bu_satellite
+
+- name: Pre-software asset inject
+  hosts: all:!bastions
+  become: true
+  tasks:
+    - name: Inject assets
+      when:
+        - pre_software_asset_injector | default(false) | bool
+        - asset_injector_assets is defined
+        - asset_injector_assets | length > 0
+      include_role:
+        name: asset_injector
+
 
 - name: PreSoftware flight-check
   hosts: localhost
