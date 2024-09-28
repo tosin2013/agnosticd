@@ -1,4 +1,11 @@
 ---
+# if oc is not logged in exit 
+- name: Check if oc is logged in
+  command: oc whoami
+  register: r_oc_whoami
+  failed_when: r_oc_whoami.rc != 0
+  changed_when: false
+  
 - name: Wait for GitLab init job to complete
   k8s_info:
     api_version: batch/v1
