@@ -5,7 +5,7 @@ silent: false
 
 ocp4_workload_trusted_application_pipeline_gitlab_namespace: gitlab
 ocp4_workload_trusted_application_pipeline_backstage_namespace: backstage
-ocp4_workload_trusted_application_pipeline_keycloak_namespace: keycloak-system
+ocp4_workload_trusted_application_pipeline_keycloak_namespace: rhsso
 ocp4_workload_trusted_application_pipeline_backstage_helm_repo: https://janus-idp.github.io/helm-backstage
 ocp4_workload_trusted_application_pipeline_backstage_helm_chart: backstage
 ocp4_workload_trusted_application_pipeline_backstage_helm_chart_version: 2.10.3
@@ -109,5 +109,13 @@ ocp4_workload_trusted_application_pipeline_ceph_storage_cluster_deploy_timeout: 
 
 ocp4_workload_trusted_application_pipeline_tpa_namespace: trusted-profile-analyzer
 
+ocp4_workload_trusted_application_pipeline_minio_namespace: ic-shared-minio
+ocp4_workload_trusted_application_pipeline_minio_username: minio
+ocp4_workload_trusted_application_pipeline_minio_password: password
+ocp4_workload_trusted_application_pipeline_minio_bucket_name: backstage-bucket
+
 # hosted or rosa
 ocp4_workload_trusted_application_pipeline_env_type: ocp4-cluster
+ocp4_workload_trusted_application_pipeline_cloud_provider: "{{ cloud_provider | default('ec2') }}"
+
+ocp4_workload_trusted_application_pipeline_orchestrator_enabled: "{{ orchestrator_enabled | default('true') | bool }}"
