@@ -14,7 +14,7 @@
   kubernetes.core.k8s_info:
     api_version: odf.openshift.io/v1alpha1
     kind: StorageSystem
-    name: ocs-storagecluster-storagesystem
+    name: "{{ 'ocs-storagecluster-storagesystem' if ocp4_workload_trusted_application_pipeline_cloud_provider != 'openshift_cnv' else 'ocs-external-storagecluster-storagesystem' }}" # yamllint disable-line rule:line-length
     namespace: openshift-storage
     wait: true
     wait_condition:
@@ -28,7 +28,7 @@
   kubernetes.core.k8s_info:
     api_version: ocs.openshift.io/v1
     kind: StorageCluster
-    name: ocs-storagecluster
+    name: "{{ 'ocs-storagecluster' if ocp4_workload_trusted_application_pipeline_cloud_provider != 'openshift_cnv' else 'ocs-external-storagecluster' }}" # yamllint disable-line rule:line-length
     namespace: openshift-storage
     wait: true
     wait_condition:
@@ -130,7 +130,6 @@
 - name: Save user data
   agnosticd_user_info:
     data:
-      openshift_console_url: https://{{ ocp4_workload_trusted_application_pipeline_openshift_console_host }}
       openshift_admin_user: "{{ ocp4_workload_trusted_application_pipeline_admin_user }}"
       openshift_admin_password: "{{ ocp4_workload_trusted_application_pipeline_admin_password }}"
       rhdh_url: https://{{ ocp4_workload_trusted_application_pipeline_backstage_host }}
