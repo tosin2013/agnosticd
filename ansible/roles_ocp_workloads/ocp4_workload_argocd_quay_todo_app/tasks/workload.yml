@@ -55,6 +55,14 @@
     label_selectors:
       - app=gitea
   register: r_gitea
+  until: r_gitea.resources[0].status.ingress[0].host is defined
+  retries: 30
+  delay: 10
+
+- name: Debug gitea route
+  ansible.builtin.debug:
+    msg: "giteaRoute: {{ r_gitea.resources[0].status.giteaRoute }}"
+  failed_when: r_gitea.resources[0].status.giteaRoute is not defined
 
 - name: Set gitea route
   ansible.builtin.set_fact:
