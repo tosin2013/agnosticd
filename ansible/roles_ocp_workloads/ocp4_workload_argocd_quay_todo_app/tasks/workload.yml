@@ -48,6 +48,14 @@
 - name: Install and Deploy Quay
   ansible.builtin.include_tasks: quay-deployment.yml
 
+- name: Register gitea route
+  kubernetes.core.k8s_info:
+    kind: Route
+    namespace: gitea
+    label_selectors:
+      - app=gitea
+  register: r_gitea
+
 - name: Set gitea route
   ansible.builtin.set_fact:
     ocp4_workload_argocd_quay_todo_app_gitea_route: "{{ r_gitea.resources[0].status.giteaRoute }}"
