@@ -1,10 +1,8 @@
 ---
-# Implement your Workload deployment tasks here
-
 - name: Install OpenShift GitOps Operator
   kubernetes.core.k8s:
     state: present
-    definition: "{{ lookup('file', 'files/operator.yaml') | from_yaml }}"
+    definition: "{{ lookup('template', './templates/operator.yaml.j2') }}"
 
 - name: Wait for OpenShift  GitOps Operator
   ansible.builtin.pause:
