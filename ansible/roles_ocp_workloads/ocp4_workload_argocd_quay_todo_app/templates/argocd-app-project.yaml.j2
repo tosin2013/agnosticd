@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ user }}-project
+  namespace: openshift-gitops
+spec:
+  description: Project for {{ user }}'s applications
+  destinations:
+    - namespace: todo-demo-app-helmrepo-{{ user }}
+      server: 'https://kubernetes.default.svc'
+  roles:
+    - description: Role for {{ user }}
+      groups:
+        - {{ user }}-group
+      name: {{ user }}-role
+      policies:
+        - 'p, proj:{{ user }}-project:{{ user }}-role, applications, *, {{ user }}-project/*, allow'
+        - 'p, proj:{{ user }}-project:{{ user }}-role, repositories, *, {{ user }}-project/*, allow'
+  sourceRepos:
+    - '{{ ocp4_workload_argocd_quay_todo_app_gitea_route }}m/{{ user }}/todo-demo-app-helmrepo.git'

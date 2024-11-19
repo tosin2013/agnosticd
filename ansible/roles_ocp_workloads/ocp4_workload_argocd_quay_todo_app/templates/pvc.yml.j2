@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: todo-demo-app-shared-workspace-pvc
-  namespace: todo-demo-app
+  name: todo-demo-app-shared-workspace-pvc-{{ user }}
+  namespace: {{ namespace }}
 spec:
   accessModes:
     - ReadWriteOnce

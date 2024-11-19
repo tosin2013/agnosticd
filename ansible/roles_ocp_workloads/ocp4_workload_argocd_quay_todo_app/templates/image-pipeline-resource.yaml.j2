@@ -1,0 +1,12 @@
+apiVersion: tekton.dev/v1alpha1
+kind: PipelineResource
+metadata:
+  name: todo-demo-app-image-{{ user}}
+  labels:
+    app: todo-demo-app
+  namespace: "{{ namespace }}"
+spec:
+  type: image
+  params:
+  - name: url
+    value: image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:latest

@@ -1,8 +1,8 @@
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
-  name: push-todo-demo-app-image-to-quay
-  namespace: todo-demo-app
+  name: push-todo-demo-app-image-to-quay-{{ user }}
+  namespace: "{{ namespace }}"
 spec:
   resources:
     inputs:
@@ -33,8 +33,8 @@ spec:
         - pull
         - '--tls-verify=false'
         - >-
-          docker://image-registry.openshift-image-registry.svc:5000/todo-demo-app/todo-demo-app:$(inputs.params.quay-io-image-tag-name)
-      image: registry.redhat.io/rhel8/podman
+          docker://image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:$(inputs.params.quay-io-image-tag-name)
+      image: registry.redhat.io/rhel9/podman
       name: podman-pull-image
       resources: {}
       securityContext:
@@ -47,9 +47,9 @@ spec:
         - tag
         - '--storage-driver=$(params.STORAGE_DRIVER)'
         - >-
-          image-registry.openshift-image-registry.svc:5000/todo-demo-app/todo-demo-app:$(inputs.params.quay-io-image-tag-name)
+          image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:$(inputs.params.quay-io-image-tag-name)
         - '$(params.quay-io-repository):$(params.quay-io-image-tag-name)'
-      image: registry.redhat.io/rhel8/buildah
+      image: registry.redhat.io/rhel9/buildah
       name: buildah-tag-image
       resources: {}
       securityContext:
@@ -61,7 +61,7 @@ spec:
         - buildah
         - images
         - '--storage-driver=$(params.STORAGE_DRIVER)'
-      image: registry.redhat.io/rhel8/buildah
+      image: registry.redhat.io/rhel9/buildah
       name: buildah-list-images-after-tagging
       resources: {}
       securityContext:
@@ -78,8 +78,8 @@ spec:
         - /etc/secret-volume/.dockerconfigjson
         - >-
           $(params.quay-io-repository):$(params.quay-io-image-tag-name)
-      image: registry.redhat.io/rhel8/buildah
-      name: push-todo-demo-app-image-to-quay
+      image: registry.redhat.io/rhel9/buildah
+      name: push-todo-demo-app-image-to-quay-{{ user }}
       resources: {}
       securityContext:
         privileged: true
@@ -96,4 +96,4 @@ spec:
         secretName: container-registry-secret
     - name: pipeline-cache
       persistentVolumeClaim:
-        claimName: todo-demo-app-shared-workspace-pvc
+        claimName: todo-demo-app-shared-workspace-pvc-{{ user }}

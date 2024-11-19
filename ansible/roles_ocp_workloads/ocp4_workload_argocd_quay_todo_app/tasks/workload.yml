@@ -25,10 +25,10 @@
   kubernetes.core.k8s:
     definition: |
       {{ lookup('kubernetes.core.kustomize',
-      dir='https://github.com/tosin2013/sno-quickstarts/gitops/cluster-config/openshift-pipelines-operator/overlays/pipelines-1.9') }}
+      dir='https://github.com/tosin2013/sno-quickstarts/gitops/cluster-config/openshift-pipelines-operator/overlays/latest') }}
     state: present
   register: openshift_pipelines_result
-  ignore_errors: true
+  ignore_errors: false
 
 - name: Wait for tkn-cli-serve pod to be ready
   kubernetes.core.k8s_info:
@@ -61,17 +61,16 @@
 
 - name: Debug gitea route
   ansible.builtin.debug:
-    msg: "giteaRoute: {{ r_gitea.resources[0].status.giteaRoute }}"
-  failed_when: r_gitea.resources[0].status.giteaRoute is not defined
+    msg: "giteaRoute: {{ r_gitea.resources[0].status.ingress[0].host }}"
+  failed_when: r_gitea.resources[0].status.ingress[0].host is not defined
 
 - name: Set gitea route
   ansible.builtin.set_fact:
-    ocp4_workload_argocd_quay_todo_app_gitea_route: "{{ r_gitea.resources[0].status.giteaRoute }}"
+    ocp4_workload_argocd_quay_todo_app_gitea_route: "{{ r_gitea.resources[0].status.ingress[0].host }}"
 
 - name: Set gitea repo url
   ansible.builtin.set_fact:
-    ocp4_workload_argocd_quay_todo_app_gitea_repo_url: |
-      {{ ocp4_workload_argocd_quay_todo_app_gitea_route }}/{{ ocp4_workload_gitea_user }}/todo-demo-app-helmrepo.git
+    ocp4_workload_argocd_quay_todo_app_gitea_repo_url: "{{ ocp4_workload_argocd_quay_todo_app_gitea_route }}/{{ ocp4_workload_gitea_user }}/todo-demo-app-helmrepo.git"
 
 - name: Install Gitops Repo Secret
   kubernetes.core.k8s:
@@ -89,30 +88,163 @@
       - merge
     definition: "{{ lookup('template', './templates/cluster-config.yaml.j2') }}"
 
-- name: Create todo-demo-app namespace
+- name: Create todo-demo-app namespace for user {{ item }}
   kubernetes.core.k8s:
     state: present
-    definition: "{{ lookup('file', 'files/todo-demo-app-namespace.yaml') | from_yaml }}"
+    definition: "{{ lookup('template', 'templates/todo-demo-app-namespace.yaml.j2') | from_yaml }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
 
-- name: Add Git Commit Task to todo-demo-app namespace
+- name: Grant admin rights to user {{ item }} for namespace {{ namespace }}
   kubernetes.core.k8s:
     state: present
-    definition: "{{ lookup('file', 'files/git-commit.yaml') | from_yaml }}"
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: admin-role-binding
+        namespace: "{{ namespace }}"
+      subjects:
+      - kind: User
+        name: "{{ user }}"
+        apiGroup: rbac.authorization.k8s.io
+      roleRef:
+        kind: ClusterRole
+        name: admin
+        apiGroup: rbac.authorization.k8s.io
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
 
-- name: Add Image pipeline resource to todo-demo-app namespace
+- name: Create group {{ item }}-group
   kubernetes.core.k8s:
     state: present
-    definition: "{{ lookup('file', 'files/image-pipeline-resource.yaml') | from_yaml }}"
+    definition:
+      apiVersion: user.openshift.io/v1
+      kind: Group
+      metadata:
+        name: "{{ user }}-group"
+  vars:
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
 
-- name: Add Push to Quay Task to todo-demo-app namespace
+- name: Add user {{ item }} to group {{ item }}-group
   kubernetes.core.k8s:
     state: present
-    definition: "{{ lookup('file', 'files/push-image-to-quay.yaml') | from_yaml }}"
+    definition:
+      apiVersion: user.openshift.io/v1
+      kind: Group
+      metadata:
+        name: "{{ user }}-group"
+      users:
+        - "{{ user }}"
+  vars:
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
 
-- name: Create PVC for todo-demo-app
+- name: Set argocd permissions for user {{ item }}
   kubernetes.core.k8s:
     state: present
-    definition: "{{ lookup('file', 'files/pvc.yml') | from_yaml }}"
+    definition: "{{ lookup('template', 'templates/argocd-app-project.yaml.j2') | from_yaml }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}" 
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: Add Git Commit Task to todo-demo-app namespace for user {{ item }}
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/git-commit.yaml.j2') | from_yaml }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}" 
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: Add Image pipeline resource to todo-demo-app namespace for user {{ item }}
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: image.openshift.io/v1
+      kind: ImageStream
+      metadata:
+        name: "todo-demo-app-{{ item }}-image"
+        namespace: "{{ namespace }}"
+      spec:
+        tags:
+        - name: "latest"
+          images:
+          - namespace: "{{ namespace }}"
+            name: "todo-demo-app"
+            dockerImageRepository: "quay.io/{{ item }}/{{ item }}-image"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: Create PVC for todo-demo-app for user {{ item }}
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/pvc.yml.j2') | from_yaml }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: push-todo-demo-app-image-to-quay Task
+  kubernetes.core.k8s:
+    state: present
+    merge_type:
+      - strategic-merge
+      - merge
+    definition: "{{ lookup('template', 'templates/push-image-to-quay.yaml.j2') }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: Save argocd-deploy-pipeline template output to file
+  ansible.builtin.copy:
+    content: "{{ lookup('template', 'templates/argocd-deploy-pipeline.yaml.j2') }}"
+    dest: "/tmp/argocd-deploy-pipeline-{{ item }}.yaml"
+  ignore_errors: false
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: Debug saved argocd-deploy-pipeline file content for user {{ item }}
+  ansible.builtin.command:
+    cmd: cat /tmp/argocd-deploy-pipeline-{{ item }}.yaml
+  register: debug_output
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
 
 - name: Add Pipeline Task
   kubernetes.core.k8s:
@@ -120,7 +252,13 @@
     merge_type:
       - strategic-merge
       - merge
-    definition: "{{ lookup('template', './templates/argocd-deploy-pipeline.yaml.j2') }}"
+    definition: "{{ lookup('template', 'templates/argocd-deploy-pipeline.yaml.j2') }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
 
 # Leave this as the last task in the playbook.
 - name: Workload tasks complete

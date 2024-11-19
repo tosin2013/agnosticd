@@ -1,46 +1,43 @@
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   labels:
     app: todo-demo-app
-  name: argocd-quay-todo-demo-app-pipeline
-  namespace: todo-demo-app
+  name: argocd-quay-todo-demo-app-pipeline-{{ user }}
+  namespace: todo-demo-app-{{ user }}
 spec:
   params:
-    - default: latest
+    - name: IMAGE_TAG
       description: Image Tag Value
-      name: IMAGE_TAG
+      default: latest
       type: string
-    - default: CHANGEME
+    - name: CURRENT_IMAGE_TAG
       description: Current Image Tag Value
-      name: CURRENT_IMAGE_TAG
+      default: CHANGEME
       type: string
-    - default: 'quay.io/takinosh/todo-demo-app:v1'
-      name: quay-io-repository
+    - name: quay-io-repository
+      default: 'quay.io/takinosh/todo-demo-app:v1'
       type: string
-    - default: latest
-      name: quay-io-image-tag-name
+    - name: quay-io-image-tag-name
+      default: latest
       type: string
-    - default: >-
-        {{ ocp4_workload_argocd_quay_todo_app_gitea_route }}/{{ ocp4_workload_gitea_user }}/todo-demo-app-helmrepo
-      name: GIT_REPOSITORY
+    - name: GIT_REPOSITORY
+      default: >-
+        {{ ocp4_workload_argocd_quay_todo_app_gitea_route }}/{{ user }}/todo-demo-app-helmrepo
       type: string
-    - default: pipeline@example.com
-      name: GIT_EMAIL
+    - name: GIT_EMAIL
+      default: pipeline@example.com
       type: string
-    - default: todo-demo-app
-      name: GIT_NAME
+    - name: GIT_NAME
+      default: todo-demo-app
       type: string
-    - default: '1'
-      name: REPLICA_COUNT
+    - name: REPLICA_COUNT
+      default: '1'
       type: string
-  resources:
-    - name: app-git
-      type: git
-    - name: image
-      type: image
-    - name: todo-demo-app-helmrepo-git
-      type: git
+  workspaces:
+    - name: shared-workspace-{{ user }}
+    - name: maven-settings-{{ user }}
+    - name: helm-shared-workspace-{{ user }}
   tasks:
     - name: fetch-repository
       params:
@@ -57,7 +54,7 @@ spec:
         name: git-clone
       workspaces:
         - name: output
-          workspace: shared-workspace
+          workspace: shared-workspace-{{ user }}
     - name: maven-run
       params:
         - name: CONTEXT_DIR
@@ -73,10 +70,10 @@ spec:
         kind: ClusterTask
         name: maven
       workspaces:
-        - name: maven-settings
-          workspace: maven-settings
+        - name: maven-settings-{{ user }}
+          workspace: maven-settings-{{ user }}
         - name: source
-          workspace: shared-workspace
+          workspace: shared-workspace-{{ user }}
     - name: build-java-app-image
       params:
         - name: CONTEXT
@@ -85,7 +82,7 @@ spec:
           value: src/main/docker/Dockerfile
         - name: IMAGE
           value: >-
-            image-registry.openshift-image-registry.svc:5000/todo-demo-app/todo-demo-app:$(params.IMAGE_TAG)
+            image-registry.openshift-image-registry.svc:5000/todo-demo-app-{{ user }}/todo-demo-app-{{ user }}-image:latest
         - name: TLSVERIFY
           value: 'false'
       runAfter:
@@ -95,32 +92,31 @@ spec:
         name: buildah
       workspaces:
         - name: source
-          workspace: shared-workspace
+          workspace: shared-workspace-{{ user }}
     - name: tag-test-image
       params:
         - name: SCRIPT
           value: |
-            oc tag todo-demo-app:$(params.IMAGE_TAG) todo-demo-app:latest
+            oc tag todo-demo-app-{{ user }}-image:$(params.IMAGE_TAG) todo-demo-app-{{ user }}-image:latest
       runAfter:
         - build-java-app-image
       taskRef:
         kind: ClusterTask
         name: openshift-client
-    - name: push-todo-demo-app-image-to-quay
+    - name: push-todo-demo-app-image-to-quay-{{ user }}
       params:
         - name: quay-io-repository
           value: $(params.quay-io-repository)
         - name: quay-io-image-tag-name
           value: $(params.quay-io-image-tag-name)
-      resources:
-        inputs:
-          - name: image
-            resource: image
+      workspaces:
+        - name: source
+          workspace: shared-workspace-{{ user }}
       runAfter:
         - tag-test-image
       taskRef:
         kind: Task
-        name: push-todo-demo-app-image-to-quay
+        name: push-todo-demo-app-image-to-quay-{{ user }}
     - name: update-image-tag-in-git
       params:
         - name: GIT_REPOSITORY
@@ -132,17 +128,16 @@ spec:
         - name: GIT_MANIFEST_DIR
           value: .
         - name: TARGET_IMAGE
-          value: $(params.quay-io-repository) 
+          value: $(params.quay-io-repository)
         - name: TARGET_TAG
           value: $(params.quay-io-image-tag-name)
         - name: REPLICA_COUNT
           value: $(params.REPLICA_COUNT)
-      resources:
-        inputs:
-          - name: source
-            resource: todo-demo-app-helmrepo-git
+      workspaces:
+        - name: source
+          workspace: helm-shared-workspace-{{ user }}
       runAfter:
-        - push-todo-demo-app-image-to-quay
+        - push-todo-demo-app-image-to-quay-{{ user }}
       taskRef:
         kind: Task
         name: update-image-tag-in-git
@@ -157,7 +152,3 @@ spec:
       taskRef:
         kind: ClusterTask
         name: argocd-task-sync-and-wait
-  workspaces:
-    - name: shared-workspace
-    - name: maven-settings
-    - name: helm-shared-workspace
