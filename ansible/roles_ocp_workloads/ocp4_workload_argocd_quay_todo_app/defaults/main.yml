@@ -26,3 +26,8 @@ ocp4_workload_pipelines_defaults:
   channel: latest
   automatic_install_plan_approval: true
   starting_csv: ""
+
+users:
+  - user1
+  - user2
+  - user3
