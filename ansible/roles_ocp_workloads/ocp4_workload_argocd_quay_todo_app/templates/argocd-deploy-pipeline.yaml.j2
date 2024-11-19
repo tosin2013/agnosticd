@@ -34,6 +34,10 @@ spec:
     - name: REPLICA_COUNT
       default: '1'
       type: string
+    - name: GIT_USERNAME
+      type: string
+    - name: GIT_TOKEN
+      type: string
   workspaces:
     - name: shared-workspace-{{ user }}
     - name: maven-settings-{{ user }}
@@ -133,6 +137,10 @@ spec:
           value: $(params.quay-io-image-tag-name)
         - name: REPLICA_COUNT
           value: $(params.REPLICA_COUNT)
+        - name: GIT_USERNAME
+          value: $(params.GIT_USERNAME)
+        - name: GIT_TOKEN
+          value: $(params.GIT_TOKEN)
       workspaces:
         - name: source
           workspace: helm-shared-workspace-{{ user }}

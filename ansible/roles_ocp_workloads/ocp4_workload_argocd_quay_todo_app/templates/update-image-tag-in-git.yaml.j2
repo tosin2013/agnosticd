@@ -35,9 +35,11 @@ spec:
     - description: Username for Git authentication
       name: GIT_USERNAME
       type: string
+      default: {{ user }}
     - description: Token or password for Git authentication
       name: GIT_TOKEN
       type: string
+      default: CHANGEME
   steps:
     - image: 'quay.io/takinosh/tekton-tools:latest'
       name: update-manifest
