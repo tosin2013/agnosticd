@@ -223,6 +223,34 @@
   loop_control:
     loop_var: item
 
+- name: update-image-tag-in-git Task
+  kubernetes.core.k8s:
+    state: present
+    merge_type:
+      - strategic-merge
+      - merge
+    definition: "{{ lookup('template', 'templates/update-image-tag-in-git.yaml.j2') }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: maven-source-pvc Task
+  kubernetes.core.k8s:
+    state: present
+    merge_type:
+      - strategic-merge
+      - merge
+    definition: "{{ lookup('template', 'templates/maven-source-pvc.yaml.j2') }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
 - name: Save argocd-deploy-pipeline template output to file
   ansible.builtin.copy:
     content: "{{ lookup('template', 'templates/argocd-deploy-pipeline.yaml.j2') }}"
