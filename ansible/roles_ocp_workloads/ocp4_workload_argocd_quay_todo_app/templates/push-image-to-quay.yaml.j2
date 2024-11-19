@@ -1,95 +1,71 @@
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: Task
 metadata:
   name: push-todo-demo-app-image-to-quay-{{ user }}
-  namespace: "{{ namespace }}"
+  namespace: {{ namespace }}
 spec:
-  resources:
-    inputs:
-      - name: image
-        type: image
   params:
-    - default: container-registry-secret
-      description: >-
-        The quay.io account that matches the credentials stored in the mounted
-        secret.
-      name: quay-io-account
+    - name: quay-io-account
       type: string
-    - default: quay.io/takinosh/todo-demo-app
+      description: The quay.io account that matches the credentials stored in the mounted secret.
+      default: container-registry-secret
+    - name: quay-io-repository
+      type: string
       description: The quay.io repository in which to store the image.
-      name: quay-io-repository
+      default: quay.io/takinosh/todo-demo-app
+    - name: quay-io-image-tag-name
       type: string
-    - default: $(inputs.params.quay-io-image-tag-name)
       description: The tag to use to identify the image.
-      name: quay-io-image-tag-name
+      default: latest
+    - name: STORAGE_DRIVER
       type: string
-    - default: overlay
-      description: The Buildah storage STORAGE_DRIVER
-      name: STORAGE_DRIVER
-      type: string
+      description: The Buildah storage driver.
+      default: overlay
   steps:
-    - command:
-        - podman
-        - pull
-        - '--tls-verify=false'
-        - >-
-          docker://image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:$(inputs.params.quay-io-image-tag-name)
+    - name: podman-pull-image
       image: registry.redhat.io/rhel9/podman
-      name: podman-pull-image
-      resources: {}
+      script: |
+        podman pull --tls-verify=false \
+          docker://image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:$(params.quay-io-image-tag-name)
       securityContext:
         privileged: true
       volumeMounts:
-        - mountPath: /var/lib/containers
-          name: pipeline-cache
-    - command:
-        - buildah
-        - tag
-        - '--storage-driver=$(params.STORAGE_DRIVER)'
-        - >-
-          image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:$(inputs.params.quay-io-image-tag-name)
-        - '$(params.quay-io-repository):$(params.quay-io-image-tag-name)'
+        - name: pipeline-cache
+          mountPath: /var/lib/containers
+    - name: buildah-tag-image
       image: registry.redhat.io/rhel9/buildah
-      name: buildah-tag-image
-      resources: {}
-      securityContext:
-        privileged: true
-      volumeMounts:
-        - mountPath: /var/lib/containers
-          name: pipeline-cache
-    - command:
-        - buildah
-        - images
-        - '--storage-driver=$(params.STORAGE_DRIVER)'
-      image: registry.redhat.io/rhel9/buildah
-      name: buildah-list-images-after-tagging
-      resources: {}
-      securityContext:
-        privileged: true
-      volumeMounts:
-        - mountPath: /var/lib/containers
-          name: pipeline-cache
-    - command:
-        - buildah
-        - push
-        - '--tls-verify=false'
-        - '--storage-driver=$(params.STORAGE_DRIVER)'
-        - '--authfile'
-        - /etc/secret-volume/.dockerconfigjson
-        - >-
+      script: |
+        buildah --storage-driver=$(params.STORAGE_DRIVER) tag \
+          image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:$(params.quay-io-image-tag-name) \
           $(params.quay-io-repository):$(params.quay-io-image-tag-name)
-      image: registry.redhat.io/rhel9/buildah
-      name: push-todo-demo-app-image-to-quay-{{ user }}
-      resources: {}
       securityContext:
         privileged: true
       volumeMounts:
-        - mountPath: /etc/secret-volume
-          name: quay-auth-secret
+        - name: pipeline-cache
+          mountPath: /var/lib/containers
+    - name: buildah-list-images-after-tagging
+      image: registry.redhat.io/rhel9/buildah
+      script: |
+        buildah --storage-driver=$(params.STORAGE_DRIVER) images
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: pipeline-cache
+          mountPath: /var/lib/containers
+    - name: push-todo-demo-app-image-to-quay-{{ user }}
+      image: registry.redhat.io/rhel9/buildah
+      script: |
+        buildah --storage-driver=$(params.STORAGE_DRIVER) push --tls-verify=false \
+          --authfile /etc/secret-volume/.dockerconfigjson \
+          $(params.quay-io-repository):$(params.quay-io-image-tag-name)
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: quay-auth-secret
+          mountPath: /etc/secret-volume
           readOnly: true
-        - mountPath: /var/lib/containers
-          name: pipeline-cache
-      workingDir: /quay
+        - name: pipeline-cache
+          mountPath: /var/lib/containers
   volumes:
     - name: quay-auth-secret
       secret:
