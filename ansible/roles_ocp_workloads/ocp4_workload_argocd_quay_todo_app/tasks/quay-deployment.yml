@@ -14,7 +14,7 @@
 
 - name: Wait for OpenShift Container Storage NooBaa deployment
   ansible.builtin.pause:
-    seconds: 60
+    seconds: 180
 
 - name: Deploy OpenShift Container Storage NooBaa
   kubernetes.core.k8s:
