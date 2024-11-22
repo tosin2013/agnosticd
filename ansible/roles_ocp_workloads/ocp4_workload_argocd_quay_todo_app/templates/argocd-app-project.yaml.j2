@@ -19,5 +19,6 @@ roles:
       - 'p, proj:{{ user }}-project:{{ user }}-role, applications, update, {{ user }}-project/*, allow'
       - 'p, proj:{{ user }}-project:{{ user }}-role, applications, delete, {{ user }}-project/*, allow'
       - 'p, proj:{{ user }}-project:{{ user }}-role, repositories, *, {{ user }}-project/*, allow'
-  sourceRepos:
-    - '{{ ocp4_workload_argocd_quay_todo_app_gitea_route }}m/{{ user }}/todo-demo-app-helmrepo.git'
+    destinations:
+    - namespace: todo-demo-app-{{ user }}
+      server: 'https://kubernetes.default.svc'

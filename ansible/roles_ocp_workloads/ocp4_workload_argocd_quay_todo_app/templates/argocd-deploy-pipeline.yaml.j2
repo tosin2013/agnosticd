@@ -101,7 +101,7 @@ spec:
       params:
         - name: SCRIPT
           value: |
-            oc tag todo-demo-app-{{ user }}-image:$(params.IMAGE_TAG) todo-demo-app-{{ user }}-image:latest
+            oc tag todo-demo-app-{{ user }}-image:latest todo-demo-app-{{ user }}-image:$(params.IMAGE_TAG)
       runAfter:
         - build-java-app-image
       taskRef:

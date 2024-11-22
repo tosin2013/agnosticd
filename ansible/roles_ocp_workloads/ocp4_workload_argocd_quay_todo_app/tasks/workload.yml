@@ -344,6 +344,34 @@
   loop_control:
     loop_var: item
 
+- name: Patch Service Account in todo-demo-app namespace for user with container secret {{ item }}
+  kubernetes.core.k8s:
+    state: patched
+    merge_type:
+      - strategic-merge
+      - merge
+    definition: "{{ lookup('template', 'templates/service-account.yaml.j2') | from_yaml }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: Add Pipeline Task Service Account Permissions
+  kubernetes.core.k8s:
+    state: present
+    merge_type:
+      - strategic-merge
+      - merge
+    definition: "{{ lookup('template', 'templates/pipeline-sa-permissions.yaml.j2') }}"
+  vars:
+    namespace: "todo-demo-app-{{ item }}"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
 - name: Grant view permissions to gitea project
   kubernetes.core.k8s:
     state: present
