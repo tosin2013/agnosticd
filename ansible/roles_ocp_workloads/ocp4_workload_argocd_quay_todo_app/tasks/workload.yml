@@ -353,7 +353,7 @@
     merge_type:
       - strategic-merge
       - merge
-    definition: "{{ lookup('template', 'templates/view-role-binding.yaml.j22') }}"
+    definition: "{{ lookup('template', 'templates/view-role-binding.yaml.j2') }}"
   vars:
     namespace: "openshift-gitops"
     user: "{{ item }}"
