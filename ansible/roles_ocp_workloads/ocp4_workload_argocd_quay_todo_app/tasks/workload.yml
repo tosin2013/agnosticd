@@ -17,6 +17,35 @@
   register: openshift_gitops_result
   ignore_errors: true
 
+- name: Set argocd permissions for user {{ item }}
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/argocd-app-project.yaml.j2') | from_yaml }}"
+  vars:
+    namespace: "openshift-gitops"
+    user: "{{ item }}"
+  loop: "{{ users }}"
+  loop_control:
+    loop_var: item
+
+- name: Delete OpenShift Gitops
+  kubernetes.core.k8s:
+    definition: |
+      {{ lookup('kubernetes.core.kustomize',
+      dir='https://github.com/tosin2013/sno-quickstarts/gitops/cluster-config/openshift-gitops') }}
+    state: present
+  register: openshift_gitops_result
+  ignore_errors: true
+
+- name: Create OpenShift Gitops
+  kubernetes.core.k8s:
+    definition: |
+      {{ lookup('kubernetes.core.kustomize',
+      dir='https://github.com/tosin2013/sno-quickstarts/gitops/cluster-config/openshift-gitops') }}
+    state: present
+  register: openshift_gitops_result
+  ignore_errors: true 
+
 - name: Install Gitea
   ansible.builtin.include_role:
     name: ocp4_workload_gitea_operator
@@ -149,17 +178,6 @@
         - "{{ user }}"
   vars:
     user: "{{ item }}"
-  loop: "{{ users }}"
-  loop_control:
-    loop_var: item
-
-- name: Set argocd permissions for user {{ item }}
-  kubernetes.core.k8s:
-    state: present
-    definition: "{{ lookup('template', 'templates/argocd-app-project.yaml.j2') | from_yaml }}"
-  vars:
-    namespace: "todo-demo-app-{{ item }}"
-    user: "{{ item }}" 
   loop: "{{ users }}"
   loop_control:
     loop_var: item

@@ -6,19 +6,19 @@ metadata:
 spec:
   description: Project for {{ user }}'s applications
   destinations:
-    - namespace: todo-demo-app-helmrepo-{{ user }}
-      server: 'https://kubernetes.default.svc'
-roles:
-  - description: Role for {{ user }}
-    groups:
-      - {{ user }}-group
-    name: {{ user }}-role
-    policies:
-      - 'p, proj:{{ user }}-project:{{ user }}-role, applications, create, {{ user }}-project/*, allow'
-      - 'p, proj:{{ user }}-project:{{ user }}-role, applications, get, {{ user }}-project/*, allow'
-      - 'p, proj:{{ user }}-project:{{ user }}-role, applications, update, {{ user }}-project/*, allow'
-      - 'p, proj:{{ user }}-project:{{ user }}-role, applications, delete, {{ user }}-project/*, allow'
-      - 'p, proj:{{ user }}-project:{{ user }}-role, repositories, *, {{ user }}-project/*, allow'
-    destinations:
     - namespace: todo-demo-app-{{ user }}
       server: 'https://kubernetes.default.svc'
+  roles:
+    - description: Role for {{ user }}
+      groups:
+        - {{ user }}-group
+      name: {{ user }}-role
+      policies:
+        - 'p, proj:{{ user }}-project:{{ user }}-role, applications, create, {{ user }}-project/*, allow'
+        - 'p, proj:{{ user }}-project:{{ user }}-role, applications, get, {{ user }}-project/*, allow'
+        - 'p, proj:{{ user }}-project:{{ user }}-role, applications, update, {{ user }}-project/*, allow'
+        - 'p, proj:{{ user }}-project:{{ user }}-role, applications, delete, {{ user }}-project/*, allow'
+        - 'p, proj:{{ user }}-project:{{ user }}-role, repositories, *, {{ user }}-project/*, allow'
+      destinations:
+      - namespace: todo-demo-app-{{ user }}
+        server: 'https://kubernetes.default.svc'
