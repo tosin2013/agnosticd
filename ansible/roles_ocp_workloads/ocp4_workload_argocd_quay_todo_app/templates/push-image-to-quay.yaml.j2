@@ -2,74 +2,81 @@ apiVersion: tekton.dev/v1
 kind: Task
 metadata:
   name: push-todo-demo-app-image-to-quay-{{ user }}
-  namespace: {{ namespace }}
+  namespace:  "{{ namespace }}"
 spec:
   params:
-    - name: quay-io-account
-      type: string
-      description: The quay.io account that matches the credentials stored in the mounted secret.
-      default: container-registry-secret
-    - name: quay-io-repository
-      type: string
+    - default: quay.io/takinosh/todo-demo-app
       description: The quay.io repository in which to store the image.
-      default: quay.io/takinosh/todo-demo-app
-    - name: quay-io-image-tag-name
+      name: quay-io-repository
       type: string
+    - default: latest
       description: The tag to use to identify the image.
-      default: latest
-    - name: STORAGE_DRIVER
+      name: quay-io-image-tag-name
       type: string
+    - default: overlay
       description: The Buildah storage driver.
-      default: overlay
+      name: STORAGE_DRIVER
+      type: string
   steps:
-    - name: podman-pull-image
-      image: registry.redhat.io/rhel9/podman
+    - computeResources: {}
+      image: registry.redhat.io/rhel9/podman:9.5-1730554132
+      name: podman-pull-image
       script: |
+        #!/bin/sh
         podman pull --tls-verify=false \
           docker://image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:$(params.quay-io-image-tag-name)
       securityContext:
         privileged: true
       volumeMounts:
-        - name: pipeline-cache
-          mountPath: /var/lib/containers
-    - name: buildah-tag-image
-      image: registry.redhat.io/rhel9/buildah
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+    - computeResources: {}
+      image: registry.redhat.io/rhel9/buildah:9.5
+      name: buildah-tag-image
       script: |
+        #!/bin/sh
         buildah --storage-driver=$(params.STORAGE_DRIVER) tag \
           image-registry.openshift-image-registry.svc:5000/{{ namespace }}/todo-demo-app-{{ user }}-image:$(params.quay-io-image-tag-name) \
           $(params.quay-io-repository):$(params.quay-io-image-tag-name)
       securityContext:
         privileged: true
       volumeMounts:
-        - name: pipeline-cache
-          mountPath: /var/lib/containers
-    - name: buildah-list-images-after-tagging
-      image: registry.redhat.io/rhel9/buildah
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+    - computeResources: {}
+      image: registry.redhat.io/rhel9/buildah:9.5
+      name: buildah-list-images-after-tagging
       script: |
+        #!/bin/sh
         buildah --storage-driver=$(params.STORAGE_DRIVER) images
       securityContext:
         privileged: true
       volumeMounts:
-        - name: pipeline-cache
-          mountPath: /var/lib/containers
-    - name: push-todo-demo-app-image-to-quay-{{ user }}
-      image: registry.redhat.io/rhel9/buildah
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+    - computeResources: {}
+      image: registry.redhat.io/rhel9/buildah:9.5
+      name: push-todo-demo-app-image-to-quay-{{ user }}
       script: |
+        #!/bin/sh
+        ls -lath /etc/secret-volume/.dockerconfigjson || exit 1
         buildah --storage-driver=$(params.STORAGE_DRIVER) push --tls-verify=false \
           --authfile /etc/secret-volume/.dockerconfigjson \
           $(params.quay-io-repository):$(params.quay-io-image-tag-name)
       securityContext:
         privileged: true
       volumeMounts:
-        - name: quay-auth-secret
-          mountPath: /etc/secret-volume
+        - mountPath: /etc/secret-volume
+          name: secret-volume
           readOnly: true
-        - name: pipeline-cache
-          mountPath: /var/lib/containers
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
   volumes:
-    - name: quay-auth-secret
+    - emptyDir: {}
+      name: varlibcontainers
+    - name: secret-volume
       secret:
-        secretName: container-registry-secret
-    - name: pipeline-cache
-      persistentVolumeClaim:
-        claimName: todo-demo-app-shared-workspace-pvc-{{ user }}
+        secretName: container-registry-secret-{{ user }}
+  workspaces:
+    - description: Workspace for shared storage
+      name: helm-shared-workspace-{{ user }}

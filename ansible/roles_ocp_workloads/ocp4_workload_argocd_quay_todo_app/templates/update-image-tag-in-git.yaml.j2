@@ -1,4 +1,4 @@
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: Task
 metadata:
   name: update-image-tag-in-git
@@ -32,18 +32,18 @@ spec:
       description: Number of replicas
       name: REPLICA_COUNT
       type: string
-    - description: Username for Git authentication
+    - default: {{ user }}
+      description: Username for Git authentication
       name: GIT_USERNAME
       type: string
-      default: {{ user }}
-    - description: Token or password for Git authentication
+    - default: CHANGEME
+      description: Token or password for Git authentication
       name: GIT_TOKEN
       type: string
-      default: CHANGEME
   steps:
-    - image: 'quay.io/takinosh/tekton-tools:latest'
+    - computeResources: {}
+      image: 'quay.io/takinosh/tekton-tools:v1.0.0'
       name: update-manifest
-      resources: {}
       script: |
         #!/bin/bash
         set -eu
@@ -81,6 +81,9 @@ spec:
       volumeMounts:
         - mountPath: /workspace/source
           name: source-workspace-{{ user }}
+  volumes:
+    - emptyDir: {}
+      name: source-workspace-{{ user }}
   workspaces:
     - description: Workspace containing the cloned Git repository
       name: source-workspace-{{ user }}
