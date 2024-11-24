@@ -142,8 +142,8 @@ spec:
         - name: GIT_TOKEN
           value: $(params.GIT_TOKEN)
       workspaces:
-        - name: source
-          workspace: helm-shared-workspace-{{ user }}
+        - name: source-workspace-{{ user }}
+          workspace: shared-workspace-user1
       runAfter:
         - push-todo-demo-app-image-to-quay-{{ user }}
       taskRef:
