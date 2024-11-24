@@ -4,44 +4,39 @@ metadata:
   labels:
     app: todo-demo-app
   name: argocd-quay-todo-demo-app-pipeline-{{ user }}
-  namespace: todo-demo-app-{{ user }}
+  namespace: {{ namespace }}
 spec:
   params:
-    - name: IMAGE_TAG
+    - default: latest
       description: Image Tag Value
-      default: latest
+      name: IMAGE_TAG
       type: string
-    - name: CURRENT_IMAGE_TAG
+    - default: CHANGEME
       description: Current Image Tag Value
-      default: CHANGEME
+      name: CURRENT_IMAGE_TAG
       type: string
-    - name: quay-io-repository
-      default: 'quay.io/takinosh/todo-demo-app:v1'
+    - default: 'quay.io/takinosh/todo-demo-app:v1'
+      name: quay-io-repository
       type: string
-    - name: quay-io-image-tag-name
-      default: latest
+    - default: latest
+      name: quay-io-image-tag-name
       type: string
-    - name: GIT_REPOSITORY
-      default: >-
-        {{ ocp4_workload_argocd_quay_todo_app_gitea_route }}/{{ user }}/todo-demo-app-helmrepo
+    - default: gitea-gitea.apps.cluster-2wcqt.2wcqt.sandbox80.opentlc.com/{{ user }}/todo-demo-app-helmrepo
+      name: GIT_REPOSITORY
       type: string
-    - name: GIT_EMAIL
-      default: pipeline@example.com
+    - default: pipeline@example.com
+      name: GIT_EMAIL
       type: string
-    - name: GIT_NAME
-      default: todo-demo-app
+    - default: todo-demo-app
+      name: GIT_NAME
       type: string
-    - name: REPLICA_COUNT
-      default: '1'
+    - default: '1'
+      name: REPLICA_COUNT
       type: string
     - name: GIT_USERNAME
       type: string
     - name: GIT_TOKEN
       type: string
-  workspaces:
-    - name: shared-workspace-{{ user }}
-    - name: maven-settings-{{ user }}
-    - name: helm-shared-workspace-{{ user }}
   tasks:
     - name: fetch-repository
       params:
@@ -85,8 +80,7 @@ spec:
         - name: DOCKERFILE
           value: src/main/docker/Dockerfile
         - name: IMAGE
-          value: >-
-            image-registry.openshift-image-registry.svc:5000/todo-demo-app-{{ user }}/todo-demo-app-{{ user }}-image:latest
+          value: 'image-registry.openshift-image-registry.svc:5000/{{ namespace }}/{{ namespace }}-image:latest'
         - name: TLSVERIFY
           value: 'false'
       runAfter:
@@ -101,7 +95,7 @@ spec:
       params:
         - name: SCRIPT
           value: |
-            oc tag todo-demo-app-{{ user }}-image:latest todo-demo-app-{{ user }}-image:$(params.IMAGE_TAG)
+            oc tag {{ namespace }}-image:latest {{ namespace }}-image:$(params.IMAGE_TAG)
       runAfter:
         - build-java-app-image
       taskRef:
@@ -113,14 +107,14 @@ spec:
           value: $(params.quay-io-repository)
         - name: quay-io-image-tag-name
           value: $(params.quay-io-image-tag-name)
-      workspaces:
-        - name: source
-          workspace: shared-workspace-{{ user }}
       runAfter:
         - tag-test-image
       taskRef:
         kind: Task
         name: push-todo-demo-app-image-to-quay-{{ user }}
+      workspaces:
+        - name: helm-shared-workspace-{{ user }}
+          workspace: helm-shared-workspace-{{ user }}
     - name: update-image-tag-in-git
       params:
         - name: GIT_REPOSITORY
@@ -141,18 +135,18 @@ spec:
           value: $(params.GIT_USERNAME)
         - name: GIT_TOKEN
           value: $(params.GIT_TOKEN)
-      workspaces:
-        - name: source-workspace-{{ user }}
-          workspace: shared-workspace-user1
       runAfter:
         - push-todo-demo-app-image-to-quay-{{ user }}
       taskRef:
         kind: Task
         name: update-image-tag-in-git
+      workspaces:
+        - name: source-workspace-{{ user }}
+          workspace: shared-workspace-{{ user }}
     - name: argocd-task-sync-and-wait
       params:
         - name: application-name
-          value: todo-demo-app
+          value: {{ namespace }}
         - name: revision
           value: main
       runAfter:
@@ -160,3 +154,7 @@ spec:
       taskRef:
         kind: ClusterTask
         name: argocd-task-sync-and-wait
+  workspaces:
+    - name: shared-workspace-{{ user }}
+    - name: maven-settings-{{ user }}
+    - name: helm-shared-workspace-{{ user }}
