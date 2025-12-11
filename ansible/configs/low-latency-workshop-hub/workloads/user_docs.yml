@@ -1,0 +1,314 @@
+---
+# User Documentation Workload
+# Builds and deploys personalized Antora documentation per user using OpenShift BuildConfig
+# Called in a loop with user_num variable
+# Idempotent - safe to re-run
+
+- name: Set user facts
+  ansible.builtin.set_fact:
+    _user_name: "{{ workshop_user_base }}{{ user_num }}"
+    _user_namespace: "{{ workshop_namespace_prefix }}{{ workshop_user_base }}{{ user_num }}"
+    _sno_guid: "workshop-{{ workshop_user_base }}{{ user_num }}"
+
+- name: Set documentation resource names
+  ansible.builtin.set_fact:
+    _docs_name: "workshop-docs"
+    _docs_route_name: "docs-{{ _user_name }}"
+    _subdomain_clean: "{{ subdomain_base_suffix | regex_replace('^\\.', '') }}"
+
+- name: Get cluster ingress domain
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Ingress
+    name: cluster
+  register: _cluster_ingress
+
+- name: Set cluster domain
+  ansible.builtin.set_fact:
+    _cluster_domain: "{{ _cluster_ingress.resources[0].spec.domain | default('apps.cluster.local') }}"
+  when: _cluster_ingress.resources | length > 0
+
+# ============================================
+# ImageStream
+# ============================================
+- name: Create ImageStream for user docs
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: image.openshift.io/v1
+      kind: ImageStream
+      metadata:
+        name: "{{ _docs_name }}"
+        namespace: "{{ _user_namespace }}"
+        labels:
+          app: "{{ _docs_name }}"
+          workshop: low-latency
+          user: "{{ _user_name }}"
+          managed-by: agnosticd
+      spec:
+        lookupPolicy:
+          local: true
+
+# ============================================
+# BuildConfig
+# ============================================
+- name: Create BuildConfig for user docs
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: build.openshift.io/v1
+      kind: BuildConfig
+      metadata:
+        name: "{{ _docs_name }}"
+        namespace: "{{ _user_namespace }}"
+        labels:
+          app: "{{ _docs_name }}"
+          workshop: low-latency
+          user: "{{ _user_name }}"
+          managed-by: agnosticd
+      spec:
+        output:
+          to:
+            kind: ImageStreamTag
+            name: "{{ _docs_name }}:latest"
+        source:
+          type: Git
+          git:
+            uri: "{{ workshop_repo_url }}"
+            ref: "{{ workshop_repo_branch | default('main') }}"
+          contextDir: /
+        strategy:
+          type: Docker
+          dockerStrategy:
+            dockerfilePath: gitops/workshop-docs/Dockerfile
+            buildArgs:
+              - name: USER_NAME
+                value: "{{ _user_name }}"
+              - name: SNO_GUID
+                value: "{{ _sno_guid }}"
+              - name: SNO_API_URL
+                value: "https://api.{{ _sno_guid }}.{{ _subdomain_clean }}:6443"
+              - name: SNO_CONSOLE_URL
+                value: "https://console-openshift-console.apps.{{ _sno_guid }}.{{ _subdomain_clean }}"
+              - name: BASTION_HOST
+                value: "bastion.{{ _sno_guid }}.{{ _subdomain_clean }}"
+              - name: SUBDOMAIN_SUFFIX
+                value: ".{{ _subdomain_clean }}"
+        triggers:
+          - type: ConfigChange
+        runPolicy: Serial
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+
+# ============================================
+# Start Build (if no builds exist)
+# ============================================
+- name: Check if build exists
+  kubernetes.core.k8s_info:
+    api_version: build.openshift.io/v1
+    kind: Build
+    namespace: "{{ _user_namespace }}"
+    label_selectors:
+      - "buildconfig={{ _docs_name }}"
+  register: _existing_builds
+
+- name: Start initial build
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: build.openshift.io/v1
+      kind: Build
+      metadata:
+        name: "{{ _docs_name }}-{{ ansible_date_time.epoch }}"
+        namespace: "{{ _user_namespace }}"
+        labels:
+          app: "{{ _docs_name }}"
+          buildconfig: "{{ _docs_name }}"
+          workshop: low-latency
+          user: "{{ _user_name }}"
+        annotations:
+          openshift.io/build-config.name: "{{ _docs_name }}"
+      spec:
+        serviceAccount: builder
+        source:
+          type: Git
+          git:
+            uri: "{{ workshop_repo_url }}"
+            ref: "{{ workshop_repo_branch | default('main') }}"
+          contextDir: /
+        strategy:
+          type: Docker
+          dockerStrategy:
+            dockerfilePath: gitops/workshop-docs/Dockerfile
+            buildArgs:
+              - name: USER_NAME
+                value: "{{ _user_name }}"
+              - name: SNO_GUID
+                value: "{{ _sno_guid }}"
+              - name: SNO_API_URL
+                value: "https://api.{{ _sno_guid }}.{{ _subdomain_clean }}:6443"
+              - name: SNO_CONSOLE_URL
+                value: "https://console-openshift-console.apps.{{ _sno_guid }}.{{ _subdomain_clean }}"
+              - name: BASTION_HOST
+                value: "bastion.{{ _sno_guid }}.{{ _subdomain_clean }}"
+              - name: SUBDOMAIN_SUFFIX
+                value: ".{{ _subdomain_clean }}"
+        output:
+          to:
+            kind: ImageStreamTag
+            name: "{{ _docs_name }}:latest"
+  when: _existing_builds.resources | length == 0
+
+# ============================================
+# Deployment
+# ============================================
+- name: Create Deployment for user docs
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: "{{ _docs_name }}"
+        namespace: "{{ _user_namespace }}"
+        labels:
+          app: "{{ _docs_name }}"
+          workshop: low-latency
+          user: "{{ _user_name }}"
+          managed-by: agnosticd
+        annotations:
+          image.openshift.io/triggers: |
+            [{"from":{"kind":"ImageStreamTag","name":"{{ _docs_name }}:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"httpd\")].image"}]
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: "{{ _docs_name }}"
+            user: "{{ _user_name }}"
+        template:
+          metadata:
+            labels:
+              app: "{{ _docs_name }}"
+              workshop: low-latency
+              user: "{{ _user_name }}"
+          spec:
+            containers:
+              - name: httpd
+                image: "image-registry.openshift-image-registry.svc:5000/{{ _user_namespace }}/{{ _docs_name }}:latest"
+                ports:
+                  - containerPort: 8080
+                    protocol: TCP
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    cpu: 200m
+                    memory: 256Mi
+                livenessProbe:
+                  httpGet:
+                    path: /index.html
+                    port: 8080
+                  initialDelaySeconds: 5
+                  periodSeconds: 30
+                readinessProbe:
+                  httpGet:
+                    path: /index.html
+                    port: 8080
+                  initialDelaySeconds: 3
+                  periodSeconds: 10
+
+# ============================================
+# Service
+# ============================================
+- name: Create Service for user docs
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: "{{ _docs_name }}"
+        namespace: "{{ _user_namespace }}"
+        labels:
+          app: "{{ _docs_name }}"
+          workshop: low-latency
+          user: "{{ _user_name }}"
+          managed-by: agnosticd
+      spec:
+        selector:
+          app: "{{ _docs_name }}"
+          user: "{{ _user_name }}"
+        ports:
+          - port: 8080
+            targetPort: 8080
+            protocol: TCP
+
+# ============================================
+# Route
+# ============================================
+- name: Create Route for user docs
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: route.openshift.io/v1
+      kind: Route
+      metadata:
+        name: "{{ _docs_route_name }}"
+        namespace: "{{ _user_namespace }}"
+        labels:
+          app: "{{ _docs_name }}"
+          workshop: low-latency
+          user: "{{ _user_name }}"
+          managed-by: agnosticd
+      spec:
+        host: "docs-{{ _user_name }}.{{ _cluster_domain }}"
+        to:
+          kind: Service
+          name: "{{ _docs_name }}"
+          weight: 100
+        port:
+          targetPort: 8080
+        tls:
+          termination: edge
+          insecureEdgeTerminationPolicy: Redirect
+
+# ============================================
+# Wait for Build and Display Status
+# ============================================
+- name: Wait for build to complete (timeout 10 min)
+  kubernetes.core.k8s_info:
+    api_version: build.openshift.io/v1
+    kind: Build
+    namespace: "{{ _user_namespace }}"
+    label_selectors:
+      - "buildconfig={{ _docs_name }}"
+  register: _builds
+  until:
+    - _builds.resources | length > 0
+    - _builds.resources | selectattr('status.phase', 'equalto', 'Complete') | list | length > 0 or
+      _builds.resources | selectattr('status.phase', 'equalto', 'Failed') | list | length > 0
+  retries: 60
+  delay: 10
+  ignore_errors: true
+
+- name: Get build status
+  ansible.builtin.set_fact:
+    _build_status: "{{ (_builds.resources | selectattr('status.phase', 'equalto', 'Complete') | list | length > 0) | ternary('Complete', 'In Progress or Failed') }}"
+
+- name: Display documentation deployment status
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════════════════════"
+      - "Documentation for: {{ _user_name }}"
+      - "════════════════════════════════════════════════════════════"
+      - "Namespace: {{ _user_namespace }}"
+      - "Build Status: {{ _build_status }}"
+      - "ImageStream: {{ _docs_name }}:latest"
+      - "URL: https://docs-{{ _user_name }}.{{ _cluster_domain }}"
+      - "════════════════════════════════════════════════════════════"

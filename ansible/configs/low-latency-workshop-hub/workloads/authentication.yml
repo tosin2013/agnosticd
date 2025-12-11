@@ -1,0 +1,121 @@
+---
+# HTPasswd Authentication Workload
+# Creates htpasswd identity provider with workshop users
+# Idempotent - safe to re-run
+
+- name: Set authentication facts
+  ansible.builtin.set_fact:
+    _htpasswd_users: []
+    _htpasswd_secret_name: htpasswd-workshop-secret
+    _oauth_idp_name: workshop-htpasswd
+
+- name: Generate user list
+  ansible.builtin.set_fact:
+    _htpasswd_users: "{{ _htpasswd_users + [{'username': workshop_user_base ~ item, 'password': workshop_user_password}] }}"
+  loop: "{{ range(1, (workshop_user_count | int) + 1) | list }}"
+
+- name: Add admin user to list
+  ansible.builtin.set_fact:
+    _htpasswd_users: "{{ _htpasswd_users + [{'username': ocp4_workload_authentication_admin_user | default('admin'), 'password': ocp4_workload_authentication_htpasswd_admin_password | default('redhat123')}] }}"
+  when: ocp4_workload_authentication_admin_user is defined
+
+- name: Create temporary htpasswd file
+  ansible.builtin.tempfile:
+    state: file
+    suffix: .htpasswd
+  register: _htpasswd_file
+
+- name: Generate htpasswd entries
+  ansible.builtin.shell: |
+    htpasswd -Bbn "{{ item.username }}" "{{ item.password }}" >> {{ _htpasswd_file.path }}
+  loop: "{{ _htpasswd_users }}"
+  no_log: true
+
+- name: Read htpasswd file content
+  ansible.builtin.slurp:
+    src: "{{ _htpasswd_file.path }}"
+  register: _htpasswd_content
+
+- name: Create htpasswd secret (idempotent)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ _htpasswd_secret_name }}"
+        namespace: openshift-config
+        labels:
+          workshop: low-latency
+          managed-by: agnosticd
+      data:
+        htpasswd: "{{ _htpasswd_content.content }}"
+      type: Opaque
+
+- name: Get current OAuth configuration
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: OAuth
+    name: cluster
+  register: _oauth_config
+
+- name: Check if htpasswd identity provider already exists
+  ansible.builtin.set_fact:
+    _htpasswd_idp_exists: "{{ _oauth_config.resources[0].spec.identityProviders | default([]) | selectattr('name', 'equalto', _oauth_idp_name) | list | length > 0 }}"
+  when: _oauth_config.resources | length > 0
+
+- name: Build identity providers list
+  ansible.builtin.set_fact:
+    _new_identity_providers: >-
+      {{
+        (_oauth_config.resources[0].spec.identityProviders | default([]) | rejectattr('name', 'equalto', _oauth_idp_name) | list) +
+        [{
+          'name': _oauth_idp_name,
+          'mappingMethod': 'claim',
+          'type': 'HTPasswd',
+          'htpasswd': {
+            'fileData': {
+              'name': _htpasswd_secret_name
+            }
+          }
+        }]
+      }}
+
+- name: Update OAuth with htpasswd identity provider (idempotent)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: config.openshift.io/v1
+      kind: OAuth
+      metadata:
+        name: cluster
+      spec:
+        identityProviders: "{{ _new_identity_providers }}"
+
+- name: Wait for OAuth pods to restart
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: openshift-authentication
+    label_selectors:
+      - app=oauth-openshift
+  register: _oauth_pods
+  until:
+    - _oauth_pods.resources | length > 0
+    - _oauth_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 0
+  retries: 30
+  delay: 10
+
+- name: Clean up temporary htpasswd file
+  ansible.builtin.file:
+    path: "{{ _htpasswd_file.path }}"
+    state: absent
+
+- name: Display authentication setup complete
+  ansible.builtin.debug:
+    msg:
+      - "✓ HTPasswd authentication configured"
+      - "Identity Provider: {{ _oauth_idp_name }}"
+      - "Users created: {{ workshop_user_count }}"
+      - "Admin user: {{ ocp4_workload_authentication_admin_user | default('admin') }}"
+

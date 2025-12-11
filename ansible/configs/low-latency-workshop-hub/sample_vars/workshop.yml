@@ -1,0 +1,48 @@
+---
+# Sample variables for workshop hub configuration
+# Copy and modify as needed for your deployment
+
+# ============================================================
+# Workshop User Configuration
+# ============================================================
+workshop_user_count: 5                    # Number of users to create
+workshop_user_base: "student"             # Base name (student1, student2, etc.)
+workshop_user_password: "workshop"        # Password for all users
+
+# Admin user
+ocp4_workload_authentication_admin_user: admin
+ocp4_workload_authentication_htpasswd_admin_password: "redhat123"
+
+# ============================================================
+# Dev Spaces Configuration
+# ============================================================
+devspaces_install: true
+devspaces_max_workspaces_per_user: 1
+devspaces_default_ide: che-code
+
+# ============================================================
+# Documentation Configuration
+# ============================================================
+workshop_docs_deploy: true
+workshop_repo_url: "https://github.com/tosin2013/low-latency-performance-workshop.git"
+workshop_repo_branch: "main"
+
+# ============================================================
+# SNO Output Directory
+# ============================================================
+# Where SNO kubeconfigs and SSH keys are located
+sno_output_dir: "{{ lookup('env', 'HOME') }}/agnosticd-output"
+
+# ============================================================
+# Subdomain Configuration
+# ============================================================
+# The subdomain suffix for your cluster
+# Example: .sandbox1234.opentlc.com
+subdomain_base_suffix: "{{ lookup('env', 'SUBDOMAIN_BASE_SUFFIX') | default('.example.opentlc.com') }}"
+
+# ============================================================
+# Resource Limits (optional)
+# ============================================================
+workshop_apply_resource_quota: false
+workshop_apply_limit_range: false
+

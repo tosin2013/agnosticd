@@ -1,0 +1,173 @@
+= Low-Latency Workshop Hub Configuration
+
+AgnosticD configuration for setting up the hub cluster for multi-user workshops.
+
+== Overview
+
+This configuration sets up the hub cluster with:
+
+* HTPasswd authentication for workshop users (student1-studentN)
+* OpenShift Dev Spaces for browser-based IDE
+* Per-user namespaces with RBAC
+* Dev Spaces auto-mount secrets (kubeconfig, SSH keys)
+* Per-user personalized documentation containers
+
+== Prerequisites
+
+* Access to an OpenShift cluster (hub cluster)
+* `oc` CLI logged in with cluster-admin privileges
+* ansible-navigator installed
+* AgnosticD repository cloned
+
+== Quick Start
+
+[source,bash]
+----
+# Navigate to agnosticd directory
+cd ~/agnosticd
+
+# Copy workshop config
+cp -r /path/to/low-latency-performance-workshop/agnosticd-configs/low-latency-workshop-hub \
+  ansible/configs/
+
+# Run the configuration
+ansible-navigator run ansible/main.yml \
+  --mode stdout \
+  -e @ansible/configs/low-latency-workshop-hub/sample_vars/workshop.yml \
+  -e env_type=low-latency-workshop-hub \
+  -e ACTION=provision \
+  -e workshop_user_count=5
+----
+
+== Configuration Variables
+
+[cols="2,3,1"]
+|===
+| Variable | Description | Default
+
+| `workshop_user_count`
+| Number of workshop users to create
+| 5
+
+| `workshop_user_base`
+| Base username (student1, student2, etc.)
+| student
+
+| `workshop_user_password`
+| Password for workshop users
+| workshop
+
+| `devspaces_install`
+| Install OpenShift Dev Spaces
+| true
+
+| `devspaces_max_workspaces_per_user`
+| Maximum workspaces per user
+| 1
+
+| `workshop_docs_deploy`
+| Deploy per-user documentation
+| true
+
+| `sno_output_dir`
+| Directory containing SNO kubeconfigs
+| ~/agnosticd-output
+|===
+
+== Workloads
+
+The configuration includes these workloads:
+
+=== authentication.yml
+
+Creates HTPasswd identity provider with workshop users.
+
+=== devspaces.yml
+
+Installs Dev Spaces operator and creates CheCluster instance.
+
+=== user_namespaces.yml
+
+Creates per-user namespaces with RBAC.
+
+=== user_secrets.yml
+
+Creates labeled secrets for Dev Spaces auto-mount:
+
+* Kubeconfig mounted at `/home/user/.kube/config`
+* SSH key mounted at `/home/user/.ssh/id_rsa`
+
+=== user_docs.yml
+
+Builds and deploys personalized Antora documentation per user.
+
+== User Experience
+
+After running this configuration:
+
+1. Users login to OpenShift console with `studentN` / `workshop`
+2. Access Dev Spaces dashboard
+3. Start "low-latency-workshop" workspace
+4. Kubeconfig and SSH keys are auto-mounted
+5. Run `oc get nodes` to verify SNO access
+6. Access personalized documentation at `https://docs-studentN.apps.<cluster>`
+
+== Idempotency
+
+All operations are idempotent and safe to re-run. The configuration will:
+
+* Update existing resources rather than fail on duplicates
+* Create placeholder secrets if SNO not yet deployed
+* Handle OAuth provider updates gracefully
+
+== Integration with SNO Deployment
+
+This configuration works with `low-latency-workshop-sno` config:
+
+[source,bash]
+----
+# 1. First, setup hub cluster
+./workshop-scripts/05-setup-hub-users.sh 5
+
+# 2. Then, deploy SNO clusters for each user
+./workshop-scripts/06-provision-user-snos.sh 5
+
+# 3. Update Dev Spaces secrets with real credentials
+./workshop-scripts/07-setup-user-devspaces.sh 5
+----
+
+== Troubleshooting
+
+=== OAuth not updating
+
+[source,bash]
+----
+# Check OAuth configuration
+oc get oauth cluster -o yaml
+
+# Check oauth pods
+oc get pods -n openshift-authentication
+----
+
+=== Dev Spaces not starting
+
+[source,bash]
+----
+# Check CheCluster status
+oc get checluster -n openshift-devspaces -o yaml
+
+# Check operator logs
+oc logs -n openshift-devspaces -l app=devspaces-operator
+----
+
+=== Secrets not mounting in Dev Spaces
+
+[source,bash]
+----
+# Verify secret labels
+oc get secret -n workshop-student1 -l controller.devfile.io/mount-to-devworkspace=true
+
+# Check secret annotations
+oc get secret student1-kubeconfig -n workshop-student1 -o yaml
+----
+

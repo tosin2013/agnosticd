@@ -1,0 +1,112 @@
+---
+# User Namespaces Workload
+# Creates per-user namespace with RBAC
+# Called in a loop with user_num variable
+# Idempotent - safe to re-run
+
+- name: Set user facts
+  ansible.builtin.set_fact:
+    _user_name: "{{ workshop_user_base }}{{ user_num }}"
+    _user_namespace: "{{ workshop_namespace_prefix }}{{ workshop_user_base }}{{ user_num }}"
+
+- name: Create user namespace (idempotent)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ _user_namespace }}"
+        labels:
+          workshop: low-latency
+          student: "{{ _user_name }}"
+          user-num: "{{ user_num }}"
+          managed-by: agnosticd
+        annotations:
+          openshift.io/description: "Workshop namespace for {{ _user_name }}"
+          openshift.io/display-name: "Workshop - {{ _user_name }}"
+
+- name: Create RoleBinding for user in their namespace (idempotent)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: "{{ _user_name }}-{{ workshop_user_namespace_role | default('admin') }}"
+        namespace: "{{ _user_namespace }}"
+        labels:
+          workshop: low-latency
+          student: "{{ _user_name }}"
+          managed-by: agnosticd
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: "{{ workshop_user_namespace_role | default('admin') }}"
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: User
+          name: "{{ _user_name }}"
+
+- name: Create ResourceQuota for user namespace (optional)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata:
+        name: workshop-quota
+        namespace: "{{ _user_namespace }}"
+        labels:
+          workshop: low-latency
+          managed-by: agnosticd
+      spec:
+        hard:
+          requests.cpu: "4"
+          requests.memory: 8Gi
+          limits.cpu: "8"
+          limits.memory: 16Gi
+          pods: "20"
+          services: "10"
+          secrets: "20"
+          configmaps: "20"
+          persistentvolumeclaims: "5"
+  when: workshop_apply_resource_quota | default(false) | bool
+
+- name: Create LimitRange for user namespace (optional)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: LimitRange
+      metadata:
+        name: workshop-limits
+        namespace: "{{ _user_namespace }}"
+        labels:
+          workshop: low-latency
+          managed-by: agnosticd
+      spec:
+        limits:
+          - type: Container
+            default:
+              cpu: 500m
+              memory: 512Mi
+            defaultRequest:
+              cpu: 100m
+              memory: 256Mi
+            max:
+              cpu: "2"
+              memory: 4Gi
+          - type: Pod
+            max:
+              cpu: "4"
+              memory: 8Gi
+  when: workshop_apply_limit_range | default(false) | bool
+
+- name: Display namespace creation complete
+  ansible.builtin.debug:
+    msg:
+      - "✓ Namespace created: {{ _user_namespace }}"
+      - "User: {{ _user_name }}"
+      - "Role: {{ workshop_user_namespace_role | default('admin') }}"
+

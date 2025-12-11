@@ -1,0 +1,851 @@
+---
+# Post-software configuration - RHACM Integration
+# Based on proven pattern from hybrid-cloud-binder config
+
+- name: Step 003 Post Software Configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tags:
+    - step003
+    - post_software
+  
+  tasks:
+    - name: Display post-software phase
+      debug:
+        msg:
+          - "Post-software configuration for {{ guid }}"
+          - "RHACM Auto-Import: {{ auto_import_to_rhacm | default(false) }}"
+    
+    - name: RHACM Integration (RHPDS Mode)
+      when:
+        - auto_import_to_rhacm | default(false) | bool
+        - rhacm_hub_api is defined
+        - rhacm_hub_kubeconfig is defined
+      block:
+        - name: Verify Hub Cluster Access
+          kubernetes.core.k8s_info:
+            kind: Namespace
+            name: open-cluster-management
+            api_version: v1
+            host: "{{ rhacm_hub_api }}"
+            kubeconfig: "{{ rhacm_hub_kubeconfig }}"
+            validate_certs: false
+          register: __r_hub
+          retries: 10
+          delay: 5
+          until:
+            - __r_hub.resources is defined
+            - __r_hub.resources | length > 0
+        
+        - name: Get SNO cluster details
+          set_fact:
+            __sno_api_url: "https://api.{{ guid }}{{ subdomain_base_suffix }}:6443"
+            # FIXED: host-ocp4-installer saves kubeconfig with env_type_guid prefix
+            __sno_kubeconfig: "{{ output_dir }}/{{ env_type }}_{{ guid }}_kubeconfig"
+            __managed_cluster_name: "workshop-{{ student_name }}"
+        
+        - name: Wait for SNO Cluster to be Ready
+          kubernetes.core.k8s_info:
+            kind: Node
+            api_version: v1
+            host: "{{ __sno_api_url }}"
+            kubeconfig: "{{ __sno_kubeconfig }}"
+            validate_certs: false
+          register: __r_sno
+          retries: 240
+          delay: 15
+          until:
+            - __r_sno.resources is defined
+            - __r_sno.resources | length > 0
+        
+        # Fix pull-secret propagation issue
+        # This ensures the global pull-secret is properly distributed to all namespaces
+        # See: https://docs.openshift.com/container-platform/4.20/openshift_images/managing_images/using-image-pull-secrets.html
+        - name: Ensure pull-secret is propagated to marketplace namespace
+          block:
+            - name: Wait for marketplace namespace to be ready
+              kubernetes.core.k8s_info:
+                kind: Namespace
+                name: openshift-marketplace
+                api_version: v1
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+              register: __r_marketplace_ns
+              retries: 30
+              delay: 10
+              until:
+                - __r_marketplace_ns.resources is defined
+                - __r_marketplace_ns.resources | length > 0
+                - __r_marketplace_ns.resources[0].status.phase == "Active"
+            
+            - name: Check if marketplace pods exist and their status
+              kubernetes.core.k8s_info:
+                kind: Pod
+                namespace: openshift-marketplace
+                api_version: v1
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+              register: __r_marketplace_pods
+            
+            - name: Check for ImagePullBackOff in marketplace pods
+              set_fact:
+                __has_image_pull_issues: >-
+                  {{ __r_marketplace_pods.resources |
+                     selectattr('status.containerStatuses', 'defined') |
+                     map(attribute='status.containerStatuses') |
+                     flatten |
+                     selectattr('state.waiting', 'defined') |
+                     selectattr('state.waiting.reason', 'defined') |
+                     selectattr('state.waiting.reason', 'in', ['ImagePullBackOff', 'ErrImagePull']) |
+                     list | length > 0 }}
+            
+            - name: Display marketplace pod health status
+              debug:
+                msg:
+                  - "Marketplace pods total: {{ __r_marketplace_pods.resources | length }}"
+                  - "Pods with image pull issues: {{ __has_image_pull_issues }}"
+                  - "Will apply pull-secret fix: {{ __has_image_pull_issues or (__r_marketplace_pods.resources | length == 0) }}"
+            
+            - name: Get global pull-secret from openshift-config
+              when: __has_image_pull_issues or (__r_marketplace_pods.resources | length == 0)
+              kubernetes.core.k8s_info:
+                kind: Secret
+                name: pull-secret
+                namespace: openshift-config
+                api_version: v1
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+              register: __r_pull_secret
+            
+            - name: Copy pull-secret to openshift-marketplace namespace
+              when: __has_image_pull_issues or (__r_marketplace_pods.resources | length == 0)
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: v1
+                  kind: Secret
+                  metadata:
+                    name: pull-secret
+                    namespace: openshift-marketplace
+                  data: "{{ __r_pull_secret.resources[0].data }}"
+                  type: kubernetes.io/dockerconfigjson
+            
+            - name: Link pull-secret to marketplace serviceaccounts
+              when: __has_image_pull_issues or (__r_marketplace_pods.resources | length == 0)
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: v1
+                  kind: ServiceAccount
+                  metadata:
+                    name: "{{ item }}"
+                    namespace: openshift-marketplace
+                  imagePullSecrets:
+                    - name: pull-secret
+              loop:
+                - redhat-operators
+                - certified-operators
+                - community-operators
+                - redhat-marketplace
+              ignore_errors: true  # Continue if serviceaccount doesn't exist yet
+            
+            - name: Copy pull-secret to open-cluster-management-agent namespace (for RHACM)
+              when: __has_image_pull_issues or (__r_marketplace_pods.resources | length == 0)
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: v1
+                  kind: Namespace
+                  metadata:
+                    name: open-cluster-management-agent
+              ignore_errors: true  # Namespace might already exist
+            
+            - name: Ensure pull-secret exists in RHACM agent namespace
+              when: __has_image_pull_issues or (__r_marketplace_pods.resources | length == 0)
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: v1
+                  kind: Secret
+                  metadata:
+                    name: pull-secret
+                    namespace: open-cluster-management-agent
+                  data: "{{ __r_pull_secret.resources[0].data }}"
+                  type: kubernetes.io/dockerconfigjson
+              ignore_errors: true  # Might not be needed yet
+        
+        - name: Create namespace on hub for SNO
+          kubernetes.core.k8s:
+            kubeconfig: "{{ rhacm_hub_kubeconfig }}"
+            validate_certs: false
+            state: present
+            kind: Namespace
+            name: "{{ __managed_cluster_name }}"
+            api_version: v1
+        
+        # Read SNO kubeconfig for auto-import
+        - name: Read SNO kubeconfig content
+          slurp:
+            src: "{{ __sno_kubeconfig }}"
+          register: __r_sno_kubeconfig
+        
+        - name: Import SNO to Hub (Create ManagedCluster, auto-import-secret, KlusterletAddonConfig)
+          kubernetes.core.k8s:
+            kubeconfig: "{{ rhacm_hub_kubeconfig }}"
+            validate_certs: false
+            state: present
+            definition: "{{ item }}"
+          loop:
+            # 1. ManagedCluster resource
+            - apiVersion: cluster.open-cluster-management.io/v1
+              kind: ManagedCluster
+              metadata:
+                name: "{{ __managed_cluster_name }}"
+                labels: "{{ cluster_labels | default({'cloud': 'auto-detect', 'vendor': 'auto-detect'}) }}"
+              spec:
+                hubAcceptsClient: true
+            
+            # 2. auto-import-secret (contains SNO kubeconfig)
+            - apiVersion: v1
+              kind: Secret
+              metadata:
+                name: auto-import-secret
+                namespace: "{{ __managed_cluster_name }}"
+              stringData:
+                autoImportRetry: "5"
+                kubeconfig: "{{ __r_sno_kubeconfig.content | b64decode }}"
+              type: Opaque
+            
+            # 3. KlusterletAddonConfig (enables RHACM features)
+            - apiVersion: agent.open-cluster-management.io/v1
+              kind: KlusterletAddonConfig
+              metadata:
+                name: "{{ __managed_cluster_name }}"
+                namespace: "{{ __managed_cluster_name }}"
+              spec:
+                clusterName: "{{ __managed_cluster_name }}"
+                clusterNamespace: "{{ __managed_cluster_name }}"
+                clusterLabels: "{{ cluster_labels | default({'cloud': 'auto-detect', 'vendor': 'auto-detect'}) }}"
+                applicationManager:
+                  enabled: true
+                certPolicyController:
+                  enabled: true
+                iamPolicyController:
+                  enabled: true
+                policyController:
+                  enabled: true
+                searchCollector:
+                  enabled: true
+          register: __r_import_sno
+          retries: 240
+          delay: 15
+        
+        - name: Wait for SNO cluster to join RHACM
+          kubernetes.core.k8s_info:
+            kubeconfig: "{{ rhacm_hub_kubeconfig }}"
+            validate_certs: false
+            api_version: cluster.open-cluster-management.io/v1
+            kind: ManagedCluster
+            name: "{{ __managed_cluster_name }}"
+            namespace: "{{ __managed_cluster_name }}"
+          register: __r_wait_sno
+          retries: 240
+          delay: 15
+          until:
+            - __r_wait_sno.resources is defined
+            - __r_wait_sno.resources | length | int > 0
+            - __r_wait_sno.resources[0].status is defined
+            - __r_wait_sno.resources[0].status.conditions is defined
+            - ( __r_wait_sno.resources[0].status | to_json | from_json |
+                json_query('conditions[?type == `ManagedClusterConditionAvailable`].status') | join ) == "True"
+        
+        - name: Create ManagedClusterSet binding (if managedclusterset defined)
+          kubernetes.core.k8s:
+            kubeconfig: "{{ rhacm_hub_kubeconfig }}"
+            validate_certs: false
+            state: present
+            definition:
+              apiVersion: cluster.open-cluster-management.io/v1beta2
+              kind: ManagedClusterSetBinding
+              metadata:
+                name: "{{ managedclusterset }}"
+                namespace: "{{ __managed_cluster_name }}"
+              spec:
+                clusterSet: "{{ managedclusterset }}"
+          ignore_errors: yes
+          when:
+            - managedclusterset is defined
+        
+        - name: Display import success
+          debug:
+            msg:
+              - "✓ SNO cluster successfully imported to RHACM!"
+              - "ManagedCluster: {{ __managed_cluster_name }}"
+              - "Status: Ready"
+              - "Verify: oc get managedcluster {{ __managed_cluster_name }}"
+      
+      rescue:
+        - name: RHACM import failed
+          debug:
+            msg:
+              - "⚠ RHACM import failed/timed out"
+              - "Check logs and RHACM status"
+              - "SNO cluster is still accessible via kubeconfig"
+    
+    - name: Standalone Mode Information
+      debug:
+        msg:
+          - "Standalone mode - no RHACM integration"
+          - "Access SNO directly via kubeconfig"
+          - "Kubeconfig: {{ output_dir }}/{{ env_type }}_{{ guid }}_kubeconfig"
+      when: not (auto_import_to_rhacm | default(false) | bool)
+    
+    - name: Create kubeconfig symlink for convenience
+      delegate_to: localhost
+      become: false
+      file:
+        src: "{{ output_dir }}/{{ env_type }}_{{ guid }}_kubeconfig"
+        dest: "{{ output_dir }}/kubeconfig"
+        state: link
+      when: 
+        - output_dir is defined
+        - agnosticd_save_output_dir | default(true) | bool
+    
+    # ============================================================
+    # Deploy Workshop Operators to SNO
+    # These operators are required for workshop exercises:
+    # - OpenShift Virtualization (Module 5)
+    # - SR-IOV Network Operator (Module 5)
+    # ============================================================
+    - name: Deploy Workshop Operators to SNO
+      when: deploy_workshop_operators | default(true) | bool
+      vars:
+        __sno_api_url: "https://api.{{ guid }}{{ subdomain_base_suffix }}:6443"
+        __sno_kubeconfig: "{{ output_dir }}/{{ env_type }}_{{ guid }}_kubeconfig"
+      block:
+        - name: Display operator deployment start
+          debug:
+            msg:
+              - "Deploying workshop operators to SNO {{ guid }}"
+              - "LVM Storage Operator: {{ deploy_lvm_storage | default(true) }}"
+              - "OpenShift Virtualization: {{ deploy_openshift_virtualization | default(true) }}"
+              - "SR-IOV Network Operator: {{ deploy_sriov_operator | default(true) }}"
+
+        # LVM Storage Operator (Required for RWX storage on SNO for OpenShift Virtualization)
+        - name: Deploy LVM Storage Operator
+          when: deploy_lvm_storage | default(true) | bool
+          block:
+            - name: Create openshift-lvm-storage namespace
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: v1
+                  kind: Namespace
+                  metadata:
+                    name: openshift-lvm-storage
+
+            - name: Create LVM Storage OperatorGroup
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: operators.coreos.com/v1
+                  kind: OperatorGroup
+                  metadata:
+                    name: lvm-operator-group
+                    namespace: openshift-lvm-storage
+                  spec:
+                    targetNamespaces:
+                      - openshift-lvm-storage
+
+            - name: Create LVM Storage Operator Subscription
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: operators.coreos.com/v1alpha1
+                  kind: Subscription
+                  metadata:
+                    name: lvms-operator
+                    namespace: openshift-lvm-storage
+                  spec:
+                    channel: stable-4.17
+                    installPlanApproval: Automatic
+                    name: lvms-operator
+                    source: redhat-operators
+                    sourceNamespace: openshift-marketplace
+
+            - name: Wait for LVM Storage CSV to be ready
+              kubernetes.core.k8s_info:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                api_version: operators.coreos.com/v1alpha1
+                kind: ClusterServiceVersion
+                namespace: openshift-lvm-storage
+                label_selectors:
+                  - operators.coreos.com/lvms-operator.openshift-lvm-storage
+              register: __r_lvm_csv
+              retries: 60
+              delay: 15
+              until:
+                - __r_lvm_csv.resources | length > 0
+                - __r_lvm_csv.resources[0].status.phase is defined
+                - __r_lvm_csv.resources[0].status.phase == "Succeeded"
+              ignore_errors: true
+
+            - name: Create LVMCluster for SNO
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: lvm.topolvm.io/v1alpha1
+                  kind: LVMCluster
+                  metadata:
+                    name: lvmcluster
+                    namespace: openshift-lvm-storage
+                  spec:
+                    storage:
+                      deviceClasses:
+                        - name: vg1
+                          default: true
+                          fstype: xfs
+                          thinPoolConfig:
+                            name: thin-pool-1
+                            sizePercent: 90
+                            overprovisionRatio: 10
+              when: __r_lvm_csv.resources | length > 0
+
+            - name: Wait for LVMCluster to be ready
+              kubernetes.core.k8s_info:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                api_version: lvm.topolvm.io/v1alpha1
+                kind: LVMCluster
+                name: lvmcluster
+                namespace: openshift-lvm-storage
+              register: __r_lvm_cluster
+              retries: 30
+              delay: 10
+              until:
+                - __r_lvm_cluster.resources | length > 0
+                - __r_lvm_cluster.resources[0].status is defined
+                - __r_lvm_cluster.resources[0].status.state is defined
+                - __r_lvm_cluster.resources[0].status.state == "Ready"
+              ignore_errors: true
+
+            - name: Display LVM Storage operator status
+              debug:
+                msg: "✓ LVM Storage Operator deployed (provides RWX storage for OpenShift Virtualization on SNO)"
+
+        # OpenShift Virtualization Operator
+        - name: Deploy OpenShift Virtualization Operator
+          when: deploy_openshift_virtualization | default(true) | bool
+          block:
+            - name: Create openshift-cnv namespace
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: v1
+                  kind: Namespace
+                  metadata:
+                    name: openshift-cnv
+
+            - name: Create OpenShift Virtualization OperatorGroup
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: operators.coreos.com/v1
+                  kind: OperatorGroup
+                  metadata:
+                    name: kubevirt-hyperconverged-group
+                    namespace: openshift-cnv
+                  spec:
+                    targetNamespaces:
+                      - openshift-cnv
+
+            - name: Create OpenShift Virtualization Subscription
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: operators.coreos.com/v1alpha1
+                  kind: Subscription
+                  metadata:
+                    name: kubevirt-hyperconverged
+                    namespace: openshift-cnv
+                  spec:
+                    channel: stable
+                    installPlanApproval: Automatic
+                    name: kubevirt-hyperconverged
+                    source: redhat-operators
+                    sourceNamespace: openshift-marketplace
+                    config:
+                      env:
+                        - name: KVM_EMULATION
+                          value: "true"
+
+            - name: Wait for OpenShift Virtualization CSV to be ready
+              kubernetes.core.k8s_info:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                api_version: operators.coreos.com/v1alpha1
+                kind: ClusterServiceVersion
+                namespace: openshift-cnv
+                label_selectors:
+                  - operators.coreos.com/kubevirt-hyperconverged.openshift-cnv
+              register: __r_cnv_csv
+              retries: 60
+              delay: 15
+              until:
+                - __r_cnv_csv.resources | length > 0
+                - __r_cnv_csv.resources[0].status.phase is defined
+                - __r_cnv_csv.resources[0].status.phase == "Succeeded"
+              ignore_errors: true
+
+            - name: Create HyperConverged instance
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: hco.kubevirt.io/v1beta1
+                  kind: HyperConverged
+                  metadata:
+                    name: kubevirt-hyperconverged
+                    namespace: openshift-cnv
+                  spec:
+                    infra:
+                      nodePlacement:
+                        tolerations:
+                          - effect: NoSchedule
+                            key: node-role.kubernetes.io/master
+                            operator: Exists
+                    workloads:
+                      nodePlacement:
+                        tolerations:
+                          - effect: NoSchedule
+                            key: node-role.kubernetes.io/master
+                            operator: Exists
+              when: __r_cnv_csv.resources | length > 0
+
+            - name: Display OpenShift Virtualization status
+              debug:
+                msg: "✓ OpenShift Virtualization operator deployed (HyperConverged may take several minutes to fully initialize)"
+
+        # SR-IOV Network Operator
+        - name: Deploy SR-IOV Network Operator
+          when: deploy_sriov_operator | default(true) | bool
+          block:
+            - name: Create openshift-sriov-network-operator namespace
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: v1
+                  kind: Namespace
+                  metadata:
+                    name: openshift-sriov-network-operator
+                    labels:
+                      openshift.io/cluster-monitoring: "true"
+
+            - name: Create SR-IOV OperatorGroup
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: operators.coreos.com/v1
+                  kind: OperatorGroup
+                  metadata:
+                    name: sriov-network-operators
+                    namespace: openshift-sriov-network-operator
+                  spec:
+                    targetNamespaces:
+                      - openshift-sriov-network-operator
+
+            - name: Create SR-IOV Network Operator Subscription
+              kubernetes.core.k8s:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                state: present
+                definition:
+                  apiVersion: operators.coreos.com/v1alpha1
+                  kind: Subscription
+                  metadata:
+                    name: sriov-network-operator-subscription
+                    namespace: openshift-sriov-network-operator
+                  spec:
+                    channel: stable
+                    installPlanApproval: Automatic
+                    name: sriov-network-operator
+                    source: redhat-operators
+                    sourceNamespace: openshift-marketplace
+
+            - name: Wait for SR-IOV CSV to be ready
+              kubernetes.core.k8s_info:
+                host: "{{ __sno_api_url }}"
+                kubeconfig: "{{ __sno_kubeconfig }}"
+                validate_certs: false
+                api_version: operators.coreos.com/v1alpha1
+                kind: ClusterServiceVersion
+                namespace: openshift-sriov-network-operator
+                label_selectors:
+                  - operators.coreos.com/sriov-network-operator.openshift-sriov-network-operator
+              register: __r_sriov_csv
+              retries: 60
+              delay: 15
+              until:
+                - __r_sriov_csv.resources | length > 0
+                - __r_sriov_csv.resources[0].status.phase is defined
+                - __r_sriov_csv.resources[0].status.phase == "Succeeded"
+              ignore_errors: true
+
+            - name: Display SR-IOV operator status
+              debug:
+                msg: "✓ SR-IOV Network Operator deployed"
+
+        - name: Display operator deployment complete
+          debug:
+            msg:
+              - "✓ Workshop operators deployment complete!"
+              - "LVM Storage Operator: {{ 'Deployed' if (deploy_lvm_storage | default(true)) else 'Skipped' }}"
+              - "OpenShift Virtualization: {{ 'Deployed' if (deploy_openshift_virtualization | default(true)) else 'Skipped' }}"
+              - "SR-IOV Network Operator: {{ 'Deployed' if (deploy_sriov_operator | default(true)) else 'Skipped' }}"
+              - "Note: Operators may take several minutes to fully initialize"
+
+      rescue:
+        - name: Operator deployment warning
+          debug:
+            msg:
+              - "⚠ Some operators may not have deployed successfully"
+              - "This could be due to marketplace pods still initializing"
+              - "Verify manually: oc get csv -A"
+
+    # ============================================
+    # Create Workshop User on SNO Cluster
+    # ============================================
+    - name: Create workshop user on SNO cluster
+      when:
+        - create_workshop_user | default(true) | bool
+        - workshop_user_password is defined
+      block:
+        - name: Set workshop user credentials
+          set_fact:
+            __workshop_username: "{{ student_name }}"
+            __workshop_password: "{{ workshop_user_password }}"
+
+        - name: Check if htpasswd command is available
+          shell: which htpasswd
+          register: __r_htpasswd_check
+          ignore_errors: true
+          changed_when: false
+
+        - name: Generate htpasswd entry using htpasswd command
+          shell: |
+            htpasswd -nbB '{{ __workshop_username }}' '{{ __workshop_password }}'
+          register: __r_htpasswd_entry
+          changed_when: false
+          when: __r_htpasswd_check.rc == 0
+
+        - name: Generate htpasswd entry using Python (fallback)
+          shell: |
+            python3 -c "
+            import bcrypt
+            import sys
+            username = '{{ __workshop_username }}'
+            password = '{{ __workshop_password }}'
+            # Generate bcrypt hash
+            hash_bytes = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=5))
+            hash_str = hash_bytes.decode()
+            # Convert \$2b\$ to \$2y\$ for OpenShift OAuth compatibility
+            # (Both are cryptographically identical, just different version identifiers)
+            hash_str = hash_str.replace('\$2b\$', '\$2y\$')
+            print(f'{username}:{hash_str}')
+            "
+          register: __r_htpasswd_python
+          changed_when: false
+          when: __r_htpasswd_check.rc != 0
+
+        - name: Set htpasswd entry fact
+          set_fact:
+            __htpasswd_entry: "{{ __r_htpasswd_entry.stdout if __r_htpasswd_check.rc == 0 else __r_htpasswd_python.stdout }}"
+
+        - name: Create htpasswd secret for workshop user
+          kubernetes.core.k8s:
+            state: present
+            host: "{{ __sno_api_url }}"
+            kubeconfig: "{{ __sno_kubeconfig }}"
+            validate_certs: false
+            definition:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: htpasswd-workshop-secret
+                namespace: openshift-config
+              type: Opaque
+              stringData:
+                htpasswd: "{{ __htpasswd_entry }}"
+
+        - name: Configure OAuth with htpasswd identity provider
+          kubernetes.core.k8s:
+            state: present
+            host: "{{ __sno_api_url }}"
+            kubeconfig: "{{ __sno_kubeconfig }}"
+            validate_certs: false
+            definition:
+              apiVersion: config.openshift.io/v1
+              kind: OAuth
+              metadata:
+                name: cluster
+              spec:
+                identityProviders:
+                  - name: workshop-htpasswd
+                    type: HTPasswd
+                    mappingMethod: claim
+                    htpasswd:
+                      fileData:
+                        name: htpasswd-workshop-secret
+
+        - name: Grant cluster-admin role to workshop user
+          kubernetes.core.k8s:
+            state: present
+            host: "{{ __sno_api_url }}"
+            kubeconfig: "{{ __sno_kubeconfig }}"
+            validate_certs: false
+            definition:
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: ClusterRoleBinding
+              metadata:
+                name: workshop-user-cluster-admin
+              roleRef:
+                apiGroup: rbac.authorization.k8s.io
+                kind: ClusterRole
+                name: cluster-admin
+              subjects:
+                - kind: User
+                  name: "{{ __workshop_username }}"
+                  apiGroup: rbac.authorization.k8s.io
+
+        - name: Wait for OAuth pods to restart
+          kubernetes.core.k8s_info:
+            kind: Pod
+            namespace: openshift-authentication
+            label_selectors:
+              - app=oauth-openshift
+            api_version: v1
+            host: "{{ __sno_api_url }}"
+            kubeconfig: "{{ __sno_kubeconfig }}"
+            validate_certs: false
+          register: __r_oauth_pods
+          retries: 30
+          delay: 10
+          until:
+            - __r_oauth_pods.resources is defined
+            - __r_oauth_pods.resources | length > 0
+            - __r_oauth_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 0
+
+        - name: Display workshop user creation complete
+          debug:
+            msg:
+              - "✓ Workshop user created on SNO cluster!"
+              - "Username: {{ __workshop_username }}"
+              - "Login: oc login {{ __sno_api_url }} -u {{ __workshop_username }} -p <password>"
+
+    - name: Skip workshop user creation
+      when: workshop_user_password is not defined
+      debug:
+        msg: "⚠ Skipping workshop user creation - workshop_user_password not provided"
+
+    - name: Save deployment summary
+      copy:
+        content: |
+          Low-Latency Workshop SNO Deployment Summary
+          ==========================================
+
+          GUID: {{ guid }}
+          Student: {{ student_name }}
+          Deployment Mode: {{ 'RHPDS (with RHACM)' if (auto_import_to_rhacm | default(false)) else 'Standalone' }}
+
+          OpenShift Details:
+            Version: {{ ocp_version }}
+            API URL: https://api.{{ guid }}{{ subdomain_base_suffix }}:6443
+            Console: https://console-openshift-console.apps.{{ guid }}{{ subdomain_base_suffix }}
+            Kubeconfig: {{ output_dir }}/{{ env_type }}_{{ guid }}_kubeconfig
+
+          {% if workshop_user_password is defined %}
+          Workshop User Credentials:
+            Username: {{ student_name }}
+            Password: <provided-by-admin>
+            Login Command: oc login https://api.{{ guid }}{{ subdomain_base_suffix }}:6443 -u {{ student_name }} -p <password>
+            Permissions: cluster-admin
+          {% endif %}
+
+          {% if auto_import_to_rhacm | default(false) %}
+          RHACM Integration:
+            Hub API: {{ rhacm_hub_api }}
+            ManagedCluster: workshop-{{ student_name }}
+            Verify: oc get managedcluster workshop-{{ student_name }}
+          {% endif %}
+
+          Workshop Operators:
+            LVM Storage Operator: {{ 'Deployed' if (deploy_lvm_storage | default(true)) else 'Skipped' }}
+            OpenShift Virtualization: {{ 'Deployed' if (deploy_openshift_virtualization | default(true)) else 'Skipped' }}
+            SR-IOV Network Operator: {{ 'Deployed' if (deploy_sriov_operator | default(true)) else 'Skipped' }}
+            Node Tuning Operator: Built-in (OpenShift 4.11+)
+
+          Next Steps:
+          {% if workshop_user_password is defined %}
+            1. Login: oc login https://api.{{ guid }}{{ subdomain_base_suffix }}:6443 -u {{ student_name }} -p <password>
+            2. Verify: oc get nodes
+            3. Check operators: oc get csv -A
+          {% else %}
+            1. oc --kubeconfig={{ output_dir }}/{{ env_type }}_{{ guid }}_kubeconfig get nodes
+            2. oc --kubeconfig={{ output_dir }}/{{ env_type }}_{{ guid }}_kubeconfig get co
+            3. oc --kubeconfig={{ output_dir }}/{{ env_type }}_{{ guid }}_kubeconfig get csv -A
+          {% endif %}
+          {% if auto_import_to_rhacm | default(false) %}
+            4. oc get managedcluster workshop-{{ student_name }}
+          {% endif %}
+        dest: "{{ output_dir }}/deployment-summary.txt"

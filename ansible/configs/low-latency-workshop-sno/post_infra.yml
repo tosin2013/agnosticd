@@ -1,0 +1,35 @@
+---
+- name: Step 002 - Post Infrastructure (SNO - No CloudFormation)
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  tags:
+  - step002
+  - post_infrastructure
+  tasks:
+  - name: SNO Post Infrastructure Info
+    agnosticd_user_info:
+      data:
+        guid: "{{ guid }}"
+        cloud_provider: "{{ cloud_provider | default('none') }}"
+        deployment_type: "sno"
+        student_name: "{{ student_name }}"
+        message: "SNO infrastructure will be provisioned by OpenShift IPI - no CloudFormation used"
+
+  - name: Display SNO infrastructure details
+    ansible.builtin.debug:
+      msg:
+        - "=== SNO Infrastructure (OpenShift IPI) ==="
+        - "  GUID: {{ guid }}"
+        - "  Student: {{ student_name }}"
+        - "  AWS Region: {{ aws_region | default('us-east-1') }}"
+        - "  Deployment: OpenShift IPI will provision all infrastructure"
+        - "  CloudFormation: DISABLED - not used for SNO"
+        - ""
+        - "OpenShift installer will create:"
+        - "  - VPC and subnets"
+        - "  - Security groups"
+        - "  - EC2 instance (m5.4xlarge)"
+        - "  - EBS volumes"
+        - "  - Route53 DNS records"

@@ -1,0 +1,160 @@
+---
+# Dev Spaces Installation Workload
+# Installs OpenShift Dev Spaces operator and creates CheCluster instance
+# Idempotent - safe to re-run
+
+- name: Create Dev Spaces namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ devspaces_namespace }}"
+        labels:
+          workshop: low-latency
+          managed-by: agnosticd
+
+- name: Create Dev Spaces OperatorGroup (AllNamespaces mode required)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: operators.coreos.com/v1
+      kind: OperatorGroup
+      metadata:
+        name: devspaces-operator
+        namespace: "{{ devspaces_namespace }}"
+      spec: {}  # Empty spec = AllNamespaces mode (required for Dev Spaces)
+
+- name: Create Dev Spaces Subscription
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: operators.coreos.com/v1alpha1
+      kind: Subscription
+      metadata:
+        name: devspaces
+        namespace: "{{ devspaces_namespace }}"
+        labels:
+          workshop: low-latency
+          managed-by: agnosticd
+      spec:
+        channel: "{{ devspaces_operator_channel | default('stable') }}"
+        installPlanApproval: Automatic
+        name: devspaces
+        source: redhat-operators
+        sourceNamespace: openshift-marketplace
+
+- name: Wait for Dev Spaces operator to be installed
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: ClusterServiceVersion
+    namespace: "{{ devspaces_namespace }}"
+    label_selectors:
+      - "operators.coreos.com/devspaces.{{ devspaces_namespace }}"
+  register: _devspaces_csv
+  until:
+    - _devspaces_csv.resources | length > 0
+    - _devspaces_csv.resources[0].status.phase is defined
+    - _devspaces_csv.resources[0].status.phase == "Succeeded"
+  retries: 60
+  delay: 10
+
+- name: Display operator installation status
+  ansible.builtin.debug:
+    msg:
+      - "✓ Dev Spaces operator installed"
+      - "CSV: {{ _devspaces_csv.resources[0].metadata.name }}"
+      - "Version: {{ _devspaces_csv.resources[0].spec.version }}"
+
+- name: Wait for CheCluster CRD to be available
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: checlusters.org.eclipse.che
+  register: _checluster_crd
+  until:
+    - _checluster_crd.resources | length > 0
+  retries: 30
+  delay: 5
+
+- name: Create CheCluster instance
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: org.eclipse.che/v2
+      kind: CheCluster
+      metadata:
+        name: "{{ devspaces_checluster_name | default('devspaces') }}"
+        namespace: "{{ devspaces_namespace }}"
+        labels:
+          workshop: low-latency
+          managed-by: agnosticd
+      spec:
+        components:
+          cheServer:
+            debug: false
+            logLevel: INFO
+          dashboard:
+            headerMessage:
+              show: true
+              text: "Low-Latency Performance Workshop - Dev Spaces"
+          pluginRegistry:
+            openVSXURL: "https://open-vsx.org"
+        devEnvironments:
+          startTimeoutSeconds: 600
+          maxNumberOfRunningWorkspacesPerUser: "{{ devspaces_max_workspaces_per_user | default(1) }}"
+          maxNumberOfWorkspacesPerUser: -1
+          secondsOfInactivityBeforeIdling: 1800
+          secondsOfRunBeforeIdling: -1
+          storage:
+            pvcStrategy: "{{ devspaces_storage_strategy | default('per-user') }}"
+          defaultNamespace:
+            autoProvision: true
+            template: "<username>-devspaces"
+          # Use external plugin registry URL to avoid local registry issues
+          defaultEditor: "{{ devspaces_default_ide | default('https://eclipse-che.github.io/che-plugin-registry/main/v3/plugins/che-incubator/che-code/latest/devfile.yaml') }}"
+          defaultComponents:
+            - name: dev-tools
+              container:
+                image: quay.io/devspaces/udi-rhel8:latest
+                memoryLimit: 4Gi
+                memoryRequest: 1Gi
+                cpuLimit: "2"
+                cpuRequest: 500m
+                mountSources: true
+                sourceMapping: /projects
+        networking:
+          auth:
+            gateway:
+              configLabels:
+                app: che
+                component: che-gateway-config
+
+- name: Wait for CheCluster to be ready
+  kubernetes.core.k8s_info:
+    api_version: org.eclipse.che/v2
+    kind: CheCluster
+    name: "{{ devspaces_checluster_name | default('devspaces') }}"
+    namespace: "{{ devspaces_namespace }}"
+  register: _checluster_status
+  until:
+    - _checluster_status.resources | length > 0
+    - _checluster_status.resources[0].status is defined
+    - _checluster_status.resources[0].status.chePhase is defined
+    - _checluster_status.resources[0].status.chePhase == "Active"
+  retries: 60
+  delay: 15
+
+- name: Get Dev Spaces URL
+  ansible.builtin.set_fact:
+    devspaces_url: "{{ _checluster_status.resources[0].status.cheURL | default('') }}"
+
+- name: Display Dev Spaces setup complete
+  ansible.builtin.debug:
+    msg:
+      - "✓ Dev Spaces installation complete"
+      - "Dashboard URL: {{ devspaces_url }}"
+      - "Max workspaces per user: {{ devspaces_max_workspaces_per_user }}"
+      - "Default IDE: {{ devspaces_default_ide | default('che-code') }}"
+

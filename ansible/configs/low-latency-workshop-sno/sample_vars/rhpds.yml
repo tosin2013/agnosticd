@@ -1,0 +1,79 @@
+---
+# Sample vars for deploying from RHPDS hub cluster
+# 
+# Usage:
+#   ansible-navigator run ansible/main.yml \
+#     -e @ansible/configs/low-latency-workshop-sno/sample_vars/rhpds.yml \
+#     -e @~/secrets-ec2.yml \
+#     -e guid=workshop-student1 \
+#     -e student_name=student1
+
+# ============================================================
+# Required Command-Line Variables
+# ============================================================
+# These MUST be provided via -e on command line:
+#   -e guid=workshop-student1
+#   -e student_name=student1
+
+# ============================================================
+# Cloud Configuration
+# ============================================================
+cloud_provider: ec2
+aws_region: us-east-2
+
+# ============================================================
+# OpenShift Version
+# ============================================================
+ocp_version: "4.20"
+ocp_channel: "stable-4.20"
+
+# ============================================================
+# SNO Instance Configuration
+# ============================================================
+sno_instance_type: m5.4xlarge
+
+# ============================================================
+# RHPDS Configuration
+# ============================================================
+# RHPDS standard subdomain pattern
+subdomain_base_suffix: ".sandbox862.opentlc.com"
+
+# NOTE: When deploying to a different RHPDS sandbox, update BOTH:
+#   1. subdomain_base_suffix (above)
+#   2. HostedZoneId in default_vars_ec2.yml
+# Find zone ID: aws route53 list-hosted-zones --query 'HostedZones[?Name==`<your-sandbox>.opentlc.com.`].Id'
+
+# ============================================================
+# RHACM Hub Integration
+# ============================================================
+# Enable hub detection (running from RHPDS hub with RHACM)
+detect_existing_hub: true
+
+# Auto-import SNO to hub's RHACM
+auto_import_to_rhacm: true
+
+# ManagedClusterSet to join
+managedclusterset: "workshop-clusters"
+
+# ============================================================
+# Student Configuration
+# ============================================================
+# Email for notifications (optional)
+email: "{{ student_name }}@workshop.example.com"
+
+# ============================================================
+# Workshop Repository
+# ============================================================
+workshop_repo_url: "https://github.com/tosin2013/low-latency-performance-workshop.git"
+workshop_repo_branch: "main"
+
+# ============================================================
+# Environment Tags
+# ============================================================
+# NOTE: project_tag is now set dynamically in default_vars.yml as:
+#   project_tag: "{{ env_type }}-{{ guid }}"
+# This ensures unique CloudFormation stack names for parallel deployments.
+# Example: low-latency-workshop-sno-workshop-user1
+# DO NOT hardcode project_tag here - it will break parallel deployments!
+environment_tag: "rhpds"
+

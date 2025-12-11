@@ -1,0 +1,237 @@
+---
+# AgnosticD Config: low-latency-workshop-sno
+# Purpose: Provision Single Node OpenShift for workshop students
+# Usage: Deploy from RHPDS hub cluster with auto-import to RHACM
+
+# ============================================================
+# Environment Configuration
+# ============================================================
+env_type: low-latency-workshop-sno
+deployment_type: sno
+guid: "workshop-{{ student_name }}"
+
+# ============================================================
+# Cloud Provider Configuration
+# ============================================================
+cloud_provider: "{{ cloud_provider | default('ec2') }}"
+aws_region: us-east-2
+
+# ============================================================
+# VPC and Networking Configuration
+# ============================================================
+# NOTE: Each student deployment creates 2 VPCs:
+#   1. Bastion VPC (via CloudFormation) - 10.0.0.0/16
+#   2. SNO VPC (via OpenShift IPI) - created by installer
+# 
+# For 30 students: 60 VPCs required
+# AWS default VPC limit: 5 per region
+# REQUIRED: Request AWS VPC quota increase to 65+ before deploying workshop
+# See: VPC_LIMIT_SOLUTION.md for details
+
+# VPC Configuration (for bastion)
+aws_vpc_cidr: "10.0.0.0/16"
+aws_public_subnet_cidr: "10.0.1.0/24"
+
+# Create VPC via CloudFormation (bastion uses this)
+create_vpc: true
+
+# ============================================================
+# OpenShift Configuration
+# ============================================================
+ocp_version: "4.20"
+ocp_channel: "stable-4.20"
+ocp_install_method: "ipi"  # Installer Provisioned Infrastructure
+
+# SNO Installation - Hybrid Approach (Bastion + IPI)
+install_ocp4: true
+ocp4_installer_version: "4.20"
+
+# OpenShift Domain Configuration
+# Base domain for the OpenShift cluster (required by ocp4-installer)
+# IMPORTANT: baseDomain should NOT include the cluster name/GUID!
+# The installer will create: <cluster_name>.<baseDomain>
+# Example: test-student1.sandbox862.opentlc.com
+ocp4_base_domain: "{{ subdomain_base_suffix | regex_replace('^\\.', '') }}"
+
+# AWS Region (used by installer)
+aws_region_final: "{{ aws_region }}"
+
+# SSH Key for cluster access (generated during deployment)
+ocp4_ssh_pub_key: "{{ lookup('file', output_dir ~ '/ssh_provision_' ~ guid ~ '.pub') | default('') }}"
+
+# ============================================================
+# Software Deployment Configuration
+# ============================================================
+# CRITICAL: Tell AgnosticD to use the openshift4 software playbook
+# This triggers the host-ocp4-installer role which runs openshift-install
+software_to_deploy: openshift4
+
+# OpenShift Cluster Configuration
+cluster_name: "{{ guid }}"  # Cluster name matches GUID for consistency
+
+# ============================================================
+# Bastion Configuration
+# REQUIRED: Bastion runs the openshift-install binary which provisions SNO via IPI
+# The bastion is the "installer host" that executes openshift-install
+install_bastion: true           # Enable bastion to run OpenShift installer
+install_student_user: true      # Create student user on bastion
+bastion_instance_count: 1       # One bastion per deployment
+
+# RHEL 9 SSHD Fix: Remove cloud-init SSH config that conflicts with AgnosticD
+# The file /etc/ssh/sshd_config.d/50-cloud-init.conf overrides sshd_config settings
+bastion_remove_cloud_init_conf: true
+
+# CloudFormation Configuration (for Bastion provisioning)
+# CloudFormation provisions the bastion VM, then bastion runs OpenShift IPI installer
+cloudformation_enabled: true    # Enable CloudFormation for bastion VM
+create_ssh_config: true         # Create inventory for bastion host
+
+# Bastion Timeout (increased for slow cloud-init Python3 installation)
+agnosticd_wait_for_host_timeout: 900  # 15 minutes for bastion SSH
+wait_for_bastion_timeout: 900         # 15 minutes for Python3 install
+
+# Pull secret (required - from secrets file)
+ocp4_pull_secret: "{{ ocp4_pull_secret }}"
+
+# ============================================================
+# Bastion Repository Configuration
+# ============================================================
+# NOTE: SNO itself (CoreOS) doesn't need repos, but BASTION (RHEL) does!
+# Bastion needs package repos to install tools (aws-cli, oc, openshift-install, etc.)
+
+# Repository method for BASTION host
+repo_method: file  # Use standard RHEL repos (no Satellite needed)
+
+# Update packages on bastion
+update_packages: false  # Don't update all packages (saves time)
+
+# Install common packages on bastion
+# Note: Only packages from standard RHEL repos (no EPEL)
+common_packages:
+  - python3
+  - python3-pip
+  - git
+  - wget
+  - curl
+  - vim  # Editor
+  - unzip
+  - tar
+  - bind-utils  # DNS tools (dig, nslookup)
+  - nc  # netcat for network testing
+  # jq and htop require EPEL - skip for now
+
+# Install AWS CLI v2 on bastion
+install_aws_cli: true
+
+# Install OpenShift CLI tools on bastion
+install_oc_cli: true
+oc_version: "{{ ocp_version }}"
+
+# ============================================================
+# SNO Instance Configuration
+# ============================================================
+# SNO requires robust instance for all-in-one deployment
+sno_instance_type: m5.4xlarge  # 16 vCPU, 64GB RAM
+sno_root_volume_size: 200      # GB
+sno_root_volume_type: gp3      # General Purpose SSD
+
+# Instance image (CoreOS)
+# Note: OpenShift installer selects appropriate CoreOS image
+sno_instance_image: "{{ ocp_version }}"
+
+# ============================================================
+# Networking Configuration
+# ============================================================
+subdomain_base_suffix: "{{ subdomain_base_suffix }}"
+subdomain_base: "{{ guid }}{{ subdomain_base_suffix }}"
+
+# DNS configuration
+create_dns: true
+use_route53: true
+
+# ============================================================
+# RHACM Integration
+# ============================================================
+# Auto-detect if running from hub with RHACM
+detect_existing_hub: true
+
+# Auto-import to RHACM if hub detected
+auto_import_to_rhacm: "{{ detect_existing_hub | default(false) }}"
+
+# Hub connection details (from environment)
+rhacm_hub_api: "{{ lookup('env', 'HUB_API_URL') | default(omit) }}"
+rhacm_hub_kubeconfig: "{{ lookup('env', 'HUB_KUBECONFIG') | default('~/.kube/config') }}"
+
+# ManagedClusterSet to join
+managedclusterset: "workshop-clusters"
+
+# Cluster labels for RHACM placement
+cluster_labels:
+  workshop: "low-latency"
+  student: "{{ student_name }}"
+  environment: "target"
+  cluster-type: "sno"
+  workshop-phase: "active"
+
+# ============================================================
+# Workshop Configuration
+# ============================================================
+workshop_namespace: "low-latency-workshop"
+workshop_repo_url: "https://github.com/tosin2013/low-latency-performance-workshop.git"
+workshop_repo_branch: "main"
+
+# ============================================================
+# Workshop Operators Configuration
+# ============================================================
+# Deploy workshop operators automatically after SNO provisioning
+deploy_workshop_operators: true
+
+# Individual operator toggles
+# NOTE: On AWS, gp3-csi provides sufficient storage for OpenShift Virtualization on SNO
+# LVM Storage is only needed for bare-metal SNO or if RWX is specifically required
+deploy_lvm_storage: false              # Not needed on AWS (gp3-csi works for VMs on SNO)
+deploy_openshift_virtualization: true  # Required for Module 5 (VMs)
+deploy_sriov_operator: true            # Required for Module 5 (SR-IOV networking)
+
+# ============================================================
+# Student Configuration
+# ============================================================
+student_name: "{{ student_name | default('student1') }}"
+student_email: "{{ student_name }}@workshop.example.com"
+
+# ============================================================
+# Output Configuration
+# ============================================================
+output_dir: "{{ lookup('env', 'HOME') }}/agnosticd-output/{{ guid }}"
+agnosticd_save_output_dir: true
+
+# Save important artifacts
+save_kubeconfig: true
+save_kubeadmin_password: true
+
+# ============================================================
+# Repository Configuration
+# ============================================================
+# NOTE: NO repo_method configuration needed for SNO!
+# SNO uses CoreOS which is self-contained
+# Only needed if provisioning RHEL-based bastion/helper VMs
+
+# ============================================================
+# Lifecycle Configuration
+# ============================================================
+# Cleanup on failure
+cleanup_on_failure: false
+
+# Email notifications
+email_enabled: false
+
+# ============================================================
+# Tags and Metadata
+# ============================================================
+# CRITICAL: project_tag MUST be unique per student for concurrent deployments!
+# CloudFormation stack name = project_tag
+# Previously: "low-latency-workshop" (all students shared same stack - BROKEN!)
+# Now: unique per GUID
+project_tag: "{{ env_type }}-{{ guid }}"
+purpose_tag: "student-sno"
+

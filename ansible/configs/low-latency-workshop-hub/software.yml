@@ -1,0 +1,171 @@
+---
+# Software configuration for hub cluster multi-user workshop setup
+# This playbook configures:
+#   1. HTPasswd authentication for workshop users
+#   2. Dev Spaces operator and instance
+#   3. Per-user namespaces with RBAC
+#   4. Per-user secrets for Dev Spaces auto-mount (kubeconfig, SSH keys)
+#   5. Per-user documentation containers
+
+- name: Step 004.1 - Configure HTPasswd Authentication
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tags:
+    - step004
+    - software
+    - authentication
+  vars:
+    ocp4_workload_authentication_idm_type: "{{ ocp4_workload_authentication_idm_type | default('htpasswd') }}"
+  tasks:
+    - name: Display authentication configuration
+      ansible.builtin.debug:
+        msg:
+          - "Configuring HTPasswd authentication"
+          - "User count: {{ workshop_user_count }}"
+          - "User base: {{ workshop_user_base }}"
+          - "Password mode: {{ 'randomized' if ocp4_workload_authentication_htpasswd_user_password_randomized | default(false) else 'static' }}"
+
+    - name: Include authentication workload tasks
+      ansible.builtin.include_tasks: workloads/authentication.yml
+
+- name: Step 004.2 - Install Dev Spaces
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tags:
+    - step004
+    - software
+    - devspaces
+  tasks:
+    - name: Display Dev Spaces configuration
+      ansible.builtin.debug:
+        msg:
+          - "Installing OpenShift Dev Spaces"
+          - "Namespace: {{ devspaces_namespace }}"
+          - "Max workspaces per user: {{ devspaces_max_workspaces_per_user }}"
+
+    - name: Include Dev Spaces workload tasks
+      ansible.builtin.include_tasks: workloads/devspaces.yml
+      when: devspaces_install | default(true) | bool
+
+- name: Step 004.3 - Create User Namespaces
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tags:
+    - step004
+    - software
+    - namespaces
+  tasks:
+    - name: Display namespace configuration
+      ansible.builtin.debug:
+        msg:
+          - "Creating user namespaces"
+          - "User count: {{ workshop_user_count }}"
+          - "Namespace prefix: {{ workshop_namespace_prefix }}"
+
+    - name: Include user namespaces workload tasks
+      ansible.builtin.include_tasks: workloads/user_namespaces.yml
+      loop: "{{ range(1, (workshop_user_count | int) + 1) | list }}"
+      loop_control:
+        loop_var: user_num
+
+- name: Step 004.4 - Create User Secrets for Dev Spaces
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tags:
+    - step004
+    - software
+    - secrets
+  tasks:
+    - name: Display secrets configuration
+      ansible.builtin.debug:
+        msg:
+          - "Creating Dev Spaces auto-mount secrets"
+          - "Kubeconfig mount: {{ devspaces_mount_kubeconfig }}"
+          - "SSH key mount: {{ devspaces_mount_ssh_key }}"
+
+    - name: Include user secrets workload tasks
+      ansible.builtin.include_tasks: workloads/user_secrets.yml
+      loop: "{{ range(1, (workshop_user_count | int) + 1) | list }}"
+      loop_control:
+        loop_var: user_num
+      when: devspaces_mount_kubeconfig | default(true) | bool or devspaces_mount_ssh_key | default(true) | bool
+
+- name: Step 004.5 - Deploy User Documentation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tags:
+    - step004
+    - software
+    - documentation
+  tasks:
+    - name: Display documentation configuration
+      ansible.builtin.debug:
+        msg:
+          - "Deploying per-user documentation"
+          - "Deploy docs: {{ workshop_docs_deploy }}"
+
+    - name: Include user documentation workload tasks
+      ansible.builtin.include_tasks: workloads/user_docs.yml
+      loop: "{{ range(1, (workshop_user_count | int) + 1) | list }}"
+      loop_control:
+        loop_var: user_num
+      when: workshop_docs_deploy | default(true) | bool
+
+- name: Step 004.6 - Generate User Information
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tags:
+    - step004
+    - software
+    - user_info
+  tasks:
+    - name: Generate workshop summary
+      ansible.builtin.copy:
+        content: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║     WORKSHOP HUB CONFIGURATION COMPLETE                    ║
+          ╚════════════════════════════════════════════════════════════╝
+
+          Users Created: {{ workshop_user_count }}
+          {% for i in range(1, (workshop_user_count | int) + 1) %}
+          
+          {{ workshop_user_base }}{{ i }}:
+            Username: {{ workshop_user_base }}{{ i }}
+            Password: {{ workshop_user_password }}
+            Namespace: {{ workshop_namespace_prefix }}{{ workshop_user_base }}{{ i }}
+            {% if workshop_docs_deploy | default(true) %}
+            Docs URL: https://docs-{{ workshop_user_base }}{{ i }}.apps.{{ cluster_ingress_domain | default('cluster.local') }}
+            {% endif %}
+          {% endfor %}
+          
+          Dev Spaces Dashboard: https://devspaces.apps.{{ cluster_ingress_domain | default('cluster.local') }}
+          
+          Next Steps:
+            1. Users login to OpenShift console
+            2. Access Dev Spaces dashboard
+            3. Start "low-latency-workshop" workspace
+            4. Kubeconfig and SSH keys are auto-mounted
+
+          Generated: {{ ansible_date_time.iso8601 | default(lookup('pipe', 'date -Iseconds')) }}
+        dest: "{{ output_dir | default('/tmp') }}/workshop-users-summary.txt"
+      ignore_errors: true
+
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "✓ Workshop hub configuration complete!"
+          - "Users: {{ workshop_user_count }}"
+          - "Summary: {{ output_dir | default('/tmp') }}/workshop-users-summary.txt"
+

@@ -1,0 +1,86 @@
+---
+- name: Step 003 - Pre Software (SNO)
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  tags:
+  - step003
+  - pre_software
+  tasks:
+  - name: Print pre-software message
+    ansible.builtin.debug:
+      msg: "Pre-Software Steps for SNO cluster {{ guid }}"
+
+  - name: Ensure output directory exists
+    ansible.builtin.file:
+      path: "{{ output_dir }}"
+      state: directory
+      mode: '0755'
+
+# CRITICAL: Fix RHEL 9 SSHD config BEFORE any other playbooks modify SSH
+# This must run early to prevent sshd restart failures
+- name: Step 003.1 - Fix RHEL 9 SSHD Configuration (Pre-Software)
+  hosts: bastions
+  become: true
+  gather_facts: true
+  tags:
+  - step003
+  - pre_software
+  - rhel9_sshd_fix
+  tasks:
+  - name: Check OS version
+    ansible.builtin.debug:
+      msg: "OS: {{ ansible_distribution }} {{ ansible_distribution_major_version }}"
+
+  - name: RHEL 9 SSHD Fix - Remove problematic drop-in configs
+    when: ansible_distribution_major_version | int >= 9
+    block:
+    - name: Check if sshd_config.d directory exists
+      ansible.builtin.stat:
+        path: /etc/ssh/sshd_config.d
+      register: sshd_config_d
+
+    - name: Remove ALL sshd_config.d drop-in files
+      when: sshd_config_d.stat.exists
+      ansible.builtin.shell: |
+        rm -f /etc/ssh/sshd_config.d/*.conf
+        echo "Removed drop-in configs"
+      register: remove_dropins
+      changed_when: "'Removed' in remove_dropins.stdout"
+
+    - name: Disable Include directive in sshd_config
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^Include /etc/ssh/sshd_config.d/'
+        line: '# Include /etc/ssh/sshd_config.d/*.conf  # Disabled for AgnosticD compatibility'
+        state: present
+        backup: yes
+
+    - name: Set PasswordAuthentication yes explicitly
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+        state: present
+
+    - name: Validate sshd configuration
+      ansible.builtin.command: sshd -t
+      register: sshd_test
+      changed_when: false
+      failed_when: false
+
+    - name: Show sshd validation result
+      ansible.builtin.debug:
+        msg: "SSHD config validation: {{ 'PASS' if sshd_test.rc == 0 else 'FAIL - ' + sshd_test.stderr }}"
+
+    - name: Restart SSHD if config is valid
+      when: sshd_test.rc == 0
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
+
+    - name: Fail early if SSHD config is invalid
+      when: sshd_test.rc != 0
+      ansible.builtin.fail:
+        msg: "SSHD configuration is invalid: {{ sshd_test.stderr }}"

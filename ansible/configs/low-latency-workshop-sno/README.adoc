@@ -1,0 +1,319 @@
+= Low-Latency Workshop SNO Config
+
+== Overview
+
+This AgnosticD configuration provisions Single Node OpenShift (SNO) clusters for the Low-Latency Performance Workshop. It is designed to be deployed from an RHPDS hub cluster with RHACM, automatically importing provisioned SNOs for multi-cluster management.
+
+== Features
+
+* Single Node OpenShift 4.20+ deployment
+* Automatic RHACM import when deployed from hub cluster
+* Per-student cluster isolation
+* AWS EC2 deployment (m5.4xlarge instances)
+* CoreOS-based (no RHEL subscription required)
+* GitOps-ready configuration
+
+== Prerequisites
+
+=== Required Tools
+
+* ansible-navigator (with execution environment)
+* podman or docker
+* AWS credentials with EC2 provisioning access
+* OpenShift pull secret from console.redhat.com
+
+=== Hub Cluster Requirements (if using RHACM import)
+
+* OpenShift 4.19+ with RHACM 2.10+
+* User with permissions to create ManagedClusters
+* ManagedClusterSet "workshop-clusters" created
+
+=== AWS Requirements
+
+*Per Student SNO*:
+* 1× m5.4xlarge instance (16 vCPU, 64GB RAM)
+* 200GB gp3 EBS volume
+* 1× VPC with internet gateway
+* 1× Elastic IP
+* Route53 hosted zone access
+
+*For 30 Students*:
+* 480 vCPUs (ensure service quota allows this)
+* Cost: ~$1,800/day
+
+== Directory Structure
+
+----
+low-latency-workshop-sno/
+├── README.adoc                  # This file
+├── default_vars.yml             # Core configuration
+├── default_vars_ec2.yml         # AWS-specific settings
+├── sample_vars/
+│   ├── rhpds.yml               # Deploy from RHPDS hub
+│   └── standalone.yml          # Standalone deployment
+└── files/
+    └── (additional files)
+----
+
+== Configuration Files
+
+=== default_vars.yml
+
+Core configuration defining:
+* SNO instance sizing
+* OpenShift version
+* RHACM integration settings
+* Cluster labels and metadata
+
+=== default_vars_ec2.yml
+
+AWS-specific configuration:
+* EC2 instance types
+* EBS volume configuration
+* VPC and networking
+* Security groups
+* AWS tags
+
+=== sample_vars/rhpds.yml
+
+Deployment from RHPDS hub cluster:
+* RHACM auto-import enabled
+* RHPDS subdomain pattern
+* Hub cluster integration
+
+=== sample_vars/standalone.yml
+
+Standalone deployment without hub:
+* Custom domain configuration
+* Optional RHACM integration
+* Cost optimization options
+
+== Deployment
+
+=== Method 1: Deploy from RHPDS Hub (Recommended)
+
+[source,bash]
+----
+# Setup prerequisites (one-time)
+pip3 install --user 'ansible-navigator[ansible-core]'
+podman pull quay.io/agnosticd/ee-multicloud:latest
+
+# Export hub details
+export HUB_API_URL=$(oc whoami --show-server)
+export HUB_KUBECONFIG=~/.kube/config
+
+# Copy config to AgnosticD
+cd ~/agnosticd
+cp -r /path/to/low-latency-workshop-sno ansible/configs/
+
+# Deploy single student SNO
+ansible-navigator run ansible/main.yml \
+  -e @ansible/configs/low-latency-workshop-sno/sample_vars/rhpds.yml \
+  -e @~/secrets-ec2.yml \
+  -e guid=workshop-student1 \
+  -e student_name=student1
+
+# Verify import to RHACM
+oc get managedcluster workshop-student1
+----
+
+=== Method 2: Standalone Deployment
+
+[source,bash]
+----
+# Deploy without hub cluster
+ansible-navigator run ansible/main.yml \
+  -e @ansible/configs/low-latency-workshop-sno/sample_vars/standalone.yml \
+  -e @~/secrets-ec2.yml \
+  -e guid=myworkshop-student1 \
+  -e student_name=student1 \
+  -e subdomain_base_suffix=.example.com
+----
+
+=== Method 3: Batch Deployment (Multiple Students)
+
+[source,bash]
+----
+# Deploy multiple SNOs in parallel (batches of 10)
+for i in {1..30}; do
+  ansible-navigator run ansible/main.yml \
+    -e @ansible/configs/low-latency-workshop-sno/sample_vars/rhpds.yml \
+    -e @~/secrets-ec2.yml \
+    -e guid=workshop-student${i} \
+    -e student_name=student${i} &
+  
+  # Wait after every 10 to avoid AWS rate limits
+  if [ $((i % 10)) -eq 0 ]; then
+    wait
+  fi
+done
+wait
+----
+
+== Secrets File Format
+
+Create `~/secrets-ec2.yml`:
+
+[source,yaml]
+----
+---
+# Cloud Provider
+cloud_provider: ec2
+
+# AWS Credentials
+aws_access_key_id: YOUR_ACCESS_KEY
+aws_secret_access_key: YOUR_SECRET_KEY
+
+# Subdomain
+subdomain_base_suffix: ".dynamic.redhatworkshops.io"
+
+# OpenShift Pull Secret (REQUIRED)
+ocp4_pull_secret: '{{ lookup("file", "~/pull-secret.json") }}'
+
+# NOTE: No repo_method needed for SNO (CoreOS-based)
+----
+
+== Variables Reference
+
+=== Required Variables (Command Line)
+
+[cols="1,3,1"]
+|===
+|Variable |Description |Example
+
+|guid
+|Unique identifier for the cluster
+|workshop-student1
+
+|student_name
+|Student identifier
+|student1
+|===
+
+=== Important Variables (Customizable)
+
+[cols="1,3,1"]
+|===
+|Variable |Description |Default
+
+|ocp_version
+|OpenShift version to deploy
+|4.20
+
+|sno_instance_type
+|AWS EC2 instance type
+|m5.4xlarge
+
+|subdomain_base_suffix
+|DNS subdomain suffix
+|.dynamic.redhatworkshops.io
+
+|auto_import_to_rhacm
+|Auto-import to RHACM hub
+|true (rhpds.yml)
+
+|managedclusterset
+|RHACM ManagedClusterSet name
+|workshop-clusters
+|===
+
+== RHACM Integration
+
+When deployed from a hub cluster with RHACM:
+
+1. *Cluster Creation*: ManagedCluster resource created on hub
+2. *Import Manifest*: Generated by RHACM
+3. *Agent Deployment*: Applied to SNO cluster
+4. *ClusterSet Binding*: SNO joins workshop-clusters set
+5. *Label Application*: Workshop labels applied for placement
+
+*Cluster Labels*:
+* `workshop: low-latency`
+* `student: {student_name}`
+* `environment: target`
+* `cluster-type: sno`
+
+== Verification
+
+[source,bash]
+----
+# Check cluster provisioning status
+ansible-navigator artifacts
+
+# Verify RHACM import
+oc get managedcluster workshop-student1
+
+# Check cluster is Ready
+oc get managedcluster workshop-student1 -o jsonpath='{.status.conditions[?(@.type=="ManagedClusterConditionAvailable")].status}'
+
+# Access SNO cluster
+oc login --kubeconfig ~/agnosticd-output/workshop-student1/kubeconfig
+----
+
+== Cleanup
+
+[source,bash]
+----
+# Destroy single cluster
+ansible-navigator run ansible/configs/low-latency-workshop-sno/destroy_env.yml \
+  -e guid=workshop-student1 \
+  -e @~/secrets-ec2.yml
+
+# Destroy multiple clusters
+for i in {1..30}; do
+  ansible-navigator run ansible/configs/low-latency-workshop-sno/destroy_env.yml \
+    -e guid=workshop-student${i} \
+    -e @~/secrets-ec2.yml &
+done
+wait
+----
+
+== Troubleshooting
+
+=== Common Issues
+
+*SNO fails to provision*:
+
+* Check AWS service quotas
+* Verify AWS credentials are valid
+* Check pull secret is valid JSON
+* Review CloudFormation stack in AWS console
+
+*RHACM import fails*:
+
+* Verify hub RHACM is healthy: `oc get multiclusterhub -n open-cluster-management`
+* Check ManagedClusterSet exists: `oc get managedclusterset workshop-clusters`
+* Verify HUB_API_URL and HUB_KUBECONFIG are set
+
+*AWS rate limit errors*:
+
+* Deploy in smaller batches (5-10 at a time)
+* Add delays between batches
+* Check AWS API throttling limits
+
+=== Logs and Artifacts
+
+[source,bash]
+----
+# Ansible Navigator artifacts
+ls -la ~/ansible-artifacts/
+
+# AgnosticD output
+ls -la ~/agnosticd-output/workshop-student1/
+
+# Kubeconfig location
+~/agnosticd-output/workshop-student1/kubeconfig
+----
+
+== Support
+
+For issues:
+
+* Check workshop documentation: `docs/deployment/`
+* Review AgnosticD docs: https://github.com/redhat-cop/agnosticd
+* Workshop repository: https://github.com/tosin2013/low-latency-performance-workshop
+
+== License
+
+Apache 2.0 - See LICENSE in repository root
+

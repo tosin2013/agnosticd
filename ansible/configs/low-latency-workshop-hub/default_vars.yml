@@ -1,0 +1,104 @@
+---
+# AgnosticD Config: low-latency-workshop-hub
+# Purpose: Configure hub cluster for multi-user workshop
+# Usage: Run on existing hub cluster to setup users, Dev Spaces, and per-user resources
+
+# ============================================================
+# Environment Configuration
+# ============================================================
+env_type: low-latency-workshop-hub
+cloud_provider: none  # Running on existing cluster
+
+# ============================================================
+# Workshop User Configuration
+# ============================================================
+workshop_user_count: 5                    # Configurable - number of users
+workshop_user_base: "user"                # Base name: user1, user2, etc.
+workshop_user_password: "workshop"        # Default password (or "generate" for random)
+workshop_user_password_length: 12         # Length if generating random passwords
+
+# User namespace prefix
+workshop_namespace_prefix: "workshop-"
+
+# ============================================================
+# HTPasswd Authentication Configuration
+# ============================================================
+# Uses ocp4_workload_authentication role from AgnosticD
+ocp4_workload_authentication_idm_type: htpasswd
+ocp4_workload_authentication_htpasswd_user_count: "{{ workshop_user_count }}"
+ocp4_workload_authentication_htpasswd_user_base: "{{ workshop_user_base }}"
+ocp4_workload_authentication_htpasswd_user_password: "{{ workshop_user_password }}"
+ocp4_workload_authentication_htpasswd_user_password_randomized: false
+ocp4_workload_authentication_remove_kubeadmin: false  # Keep kubeadmin for admin access
+
+# Admin user configuration
+ocp4_workload_authentication_admin_user: admin
+ocp4_workload_authentication_htpasswd_admin_password: "{{ workshop_admin_password | default('redhat123') }}"
+
+# ============================================================
+# Dev Spaces Configuration
+# ============================================================
+devspaces_install: true
+devspaces_namespace: openshift-devspaces
+devspaces_operator_channel: stable
+devspaces_max_workspaces_per_user: 1
+
+# CheCluster configuration
+devspaces_checluster_name: devspaces
+devspaces_storage_strategy: per-user  # Each user gets their own PVC
+
+# ============================================================
+# Per-User Secret Configuration (for Dev Spaces auto-mount)
+# ============================================================
+# These secrets will be labeled for Dev Spaces to auto-mount
+devspaces_mount_kubeconfig: true
+devspaces_mount_ssh_key: true
+devspaces_kubeconfig_mount_path: /home/user/.kube
+devspaces_ssh_mount_path: /home/user/.ssh
+
+# ============================================================
+# SNO Output Directory
+# ============================================================
+# Where SNO kubeconfigs and SSH keys are stored
+sno_output_dir: "{{ lookup('env', 'HOME') }}/agnosticd-output"
+
+# ============================================================
+# Workshop Documentation Configuration
+# ============================================================
+workshop_docs_deploy: true
+workshop_docs_image: registry.access.redhat.com/ubi9/httpd-24:1-301
+workshop_docs_route_suffix: "docs"
+
+# Workshop repository
+workshop_repo_url: "https://github.com/tosin2013/low-latency-performance-workshop.git"
+workshop_repo_branch: "main"
+workshop_repo_path: /home/lab-user/low-latency-performance-workshop
+
+# ============================================================
+# Subdomain Configuration
+# ============================================================
+# Will be auto-detected from cluster if not provided
+subdomain_base_suffix: "{{ lookup('env', 'SUBDOMAIN_BASE_SUFFIX') | default('') }}"
+
+# ============================================================
+# RBAC Configuration
+# ============================================================
+# Role to assign users in their namespace
+workshop_user_namespace_role: admin  # admin, edit, or view
+
+# ============================================================
+# Output Configuration
+# ============================================================
+output_dir: "{{ lookup('env', 'HOME') }}/workshop-hub-output"
+agnosticd_save_output_dir: true
+
+# ============================================================
+# Idempotency Configuration
+# ============================================================
+# All operations should be idempotent (safe to re-run)
+force_recreation: false  # Set to true to force recreation of resources
+
+# ============================================================
+# Cleanup Configuration
+# ============================================================
+cleanup_on_failure: false

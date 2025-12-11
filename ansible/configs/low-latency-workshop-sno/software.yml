@@ -1,0 +1,203 @@
+---
+- name: Step 004.1 - Configure Bastion Host
+  hosts: bastions
+  become: true
+  gather_facts: true
+  tags:
+    - step004
+    - software
+    - bastion_software
+  tasks:
+    - name: Display bastion configuration start
+      ansible.builtin.debug:
+        msg: "Configuring bastion host for SNO deployment"
+
+    # RHEL 9 SSHD Fix: Remove ALL sshd_config.d files that conflict with AgnosticD
+    # These drop-in configs override sshd_config settings and cause restart failures
+    - name: Remove all sshd_config.d drop-in files (RHEL 9 fix)
+      ansible.builtin.shell: |
+        rm -f /etc/ssh/sshd_config.d/*.conf 2>/dev/null || true
+      changed_when: false
+
+    - name: Comment out Include directive in sshd_config (RHEL 9 fix)
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^Include /etc/ssh/sshd_config.d/\*\.conf'
+        line: '# Include /etc/ssh/sshd_config.d/*.conf  # Disabled for AgnosticD compatibility'
+        state: present
+      ignore_errors: true
+
+    - name: Ensure PasswordAuthentication is set correctly
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+        state: present
+
+    - name: Validate sshd config
+      ansible.builtin.command: sshd -t
+      register: sshd_validate
+      changed_when: false
+      failed_when: false
+
+    - name: Show sshd validation errors if any
+      ansible.builtin.debug:
+        var: sshd_validate
+      when: sshd_validate.rc != 0
+
+    - name: Restart SSHD after RHEL 9 fixes
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
+      when: sshd_validate.rc == 0
+
+    - name: Install common packages
+      ansible.builtin.package:
+        name: "{{ common_packages }}"
+        state: present
+      when: common_packages is defined
+      # Ignore if some packages aren't available (e.g., EPEL packages)
+      ignore_errors: false
+
+    - name: Install AWS CLI v2
+      when: install_aws_cli | default(false) | bool
+      block:
+        - name: Download AWS CLI v2
+          ansible.builtin.get_url:
+            url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+            dest: "/tmp/awscliv2.zip"
+            mode: '0644'
+
+        - name: Unzip AWS CLI
+          ansible.builtin.unarchive:
+            src: "/tmp/awscliv2.zip"
+            dest: "/tmp/"
+            remote_src: yes
+
+        - name: Install AWS CLI
+          ansible.builtin.command:
+            cmd: /tmp/aws/install --update
+            creates: /usr/local/bin/aws
+
+        - name: Verify AWS CLI installation
+          ansible.builtin.command: /usr/local/bin/aws --version
+          register: aws_version
+          changed_when: false
+
+        - name: Display AWS CLI version
+          ansible.builtin.debug:
+            var: aws_version.stdout
+
+    - name: Install OpenShift CLI (oc)
+      when: install_oc_cli | default(false) | bool
+      block:
+        - name: Download oc CLI
+          ansible.builtin.get_url:
+            url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-{{ oc_version }}/openshift-client-linux.tar.gz"
+            dest: "/tmp/oc-client.tar.gz"
+            mode: '0644'
+
+        - name: Extract oc CLI
+          ansible.builtin.unarchive:
+            src: "/tmp/oc-client.tar.gz"
+            dest: "/usr/local/bin/"
+            remote_src: yes
+            creates: /usr/local/bin/oc
+
+        - name: Make oc executable
+          ansible.builtin.file:
+            path: "{{ item }}"
+            mode: '0755'
+          loop:
+            - /usr/local/bin/oc
+            - /usr/local/bin/kubectl
+
+        - name: Verify oc installation
+          ansible.builtin.command: /usr/local/bin/oc version --client
+          register: oc_version_output
+          changed_when: false
+
+        - name: Display oc version
+          ansible.builtin.debug:
+            var: oc_version_output.stdout
+
+    - name: Download openshift-install binary
+      ansible.builtin.get_url:
+        url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-{{ ocp_version }}/openshift-install-linux.tar.gz"
+        dest: "/tmp/openshift-install.tar.gz"
+        mode: '0644'
+
+    - name: Extract openshift-install binary
+      ansible.builtin.unarchive:
+        src: "/tmp/openshift-install.tar.gz"
+        dest: "/usr/local/bin/"
+        remote_src: yes
+        creates: /usr/local/bin/openshift-install
+
+    - name: Make openshift-install executable
+      ansible.builtin.file:
+        path: /usr/local/bin/openshift-install
+        mode: '0755'
+
+    - name: Verify openshift-install
+      ansible.builtin.command: /usr/local/bin/openshift-install version
+      register: installer_version
+      changed_when: false
+
+    - name: Display openshift-install version
+      ansible.builtin.debug:
+        var: installer_version.stdout
+
+    - name: Create OpenShift install directory
+      ansible.builtin.file:
+        path: "/home/ec2-user/openshift-install"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+
+    - name: Display bastion configuration complete
+      ansible.builtin.debug:
+        msg: "Bastion host configured successfully for SNO deployment"
+
+# ============================================================
+# CRITICAL: Create student user BEFORE host-ocp4-installer role runs!
+# The host-ocp4-installer role expects the student user to exist when
+# install_student_user is true. Without this, the deployment fails with:
+# "chown failed: failed to look up user studentX"
+# ============================================================
+- name: Step 004.2 - Create Student User on Bastion
+  hosts: bastions
+  become: true
+  gather_facts: false
+  tags:
+    - step004
+    - software
+    - student_user
+  roles:
+    - role: bastion-student-user
+  vars:
+    # Use the student_name from deployment vars
+    student_name: "{{ student_name | default('student1') }}"
+    # Allow student to sudo
+    student_sudo: true
+    # Set user data for AgnosticD output
+    bastion_student_set_user_data: true
+    # Don't show info messages (handled elsewhere)
+    bastion_student_show_user_info: false
+
+- name: Step 004.3 - SNO Installation Status
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  tags:
+    - step004
+    - software
+  tasks:
+    - name: Print SNO installation message
+      ansible.builtin.debug:
+        msg: "SNO cluster {{ guid }} - OpenShift installation handled by IPI installer on bastion"
+
+    # Note: The actual OpenShift installation is handled by openshift-install
+    # binary running on the bastion host. AgnosticD's ocp4 roles will trigger this.
