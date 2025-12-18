@@ -1,0 +1,88 @@
+---
+# ============================================================
+# Multi-User Hub Configuration for Low Latency Performance Workshop
+# ============================================================
+# Use this file when deploying the workshop for multiple users
+# on a hub cluster with Dev Spaces
+#
+# Usage:
+#   ansible-playbook main.yml -e @roles_ocp_workloads/ocp4_workload_low_latency_workshop/sample_vars/multi_user.yml
+
+# ============================================================
+# AgnosticD Configuration
+# ============================================================
+cloud_provider: none
+env_type: ocp-workloads
+
+# Workload to deploy
+ocp_workloads:
+  - ocp4_workload_low_latency_workshop
+
+# Target host
+target_host: localhost
+
+# ============================================================
+# Multi-User Mode Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_multi_user_mode: true
+ocp4_workload_low_latency_workshop_user_count: 5
+ocp4_workload_low_latency_workshop_user_base: user
+ocp4_workload_low_latency_workshop_user_password: workshop
+
+# ============================================================
+# Authentication Setup
+# ============================================================
+ocp4_workload_low_latency_workshop_setup_authentication: true
+ocp4_workload_low_latency_workshop_admin_user: admin
+ocp4_workload_low_latency_workshop_admin_password: redhat123
+
+# ============================================================
+# Dev Spaces Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_deploy_devspaces: true
+ocp4_workload_low_latency_workshop_devspaces_max_workspaces_per_user: 1
+ocp4_workload_low_latency_workshop_devspaces_idle_timeout: 1800
+
+# Dev Spaces auto-mount secrets
+ocp4_workload_low_latency_workshop_devspaces_mount_kubeconfig: true
+ocp4_workload_low_latency_workshop_devspaces_mount_ssh_key: true
+
+# ============================================================
+# Operator Installation (can disable if already installed)
+# ============================================================
+# For hub clusters, you may want to disable these if only
+# Dev Spaces and user setup is needed
+ocp4_workload_low_latency_workshop_deploy_gitops: true
+ocp4_workload_low_latency_workshop_deploy_virtualization: false
+ocp4_workload_low_latency_workshop_deploy_sriov: false
+ocp4_workload_low_latency_workshop_deploy_docs: true
+
+# ============================================================
+# Namespace Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_namespace: low-latency-workshop
+ocp4_workload_low_latency_workshop_namespace_prefix: "workshop-"
+ocp4_workload_low_latency_workshop_user_namespace_role: admin
+
+# Resource quotas (optional)
+ocp4_workload_low_latency_workshop_apply_resource_quota: false
+ocp4_workload_low_latency_workshop_apply_limit_range: false
+
+# ============================================================
+# SNO Output Directory
+# ============================================================
+# Path where SNO kubeconfigs and SSH keys are stored
+# Used for Dev Spaces auto-mount secrets
+ocp4_workload_low_latency_workshop_sno_output_dir: "{{ lookup('env', 'HOME') }}/agnosticd-output"
+
+# ============================================================
+# Workshop Repository
+# ============================================================
+ocp4_workload_low_latency_workshop_repo_url: "https://github.com/tosin2013/low-latency-performance-workshop.git"
+ocp4_workload_low_latency_workshop_repo_branch: main
+
+# ============================================================
+# Silent mode
+# ============================================================
+silent: false
+

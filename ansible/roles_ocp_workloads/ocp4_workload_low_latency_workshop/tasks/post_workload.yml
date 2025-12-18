@@ -1,0 +1,138 @@
+---
+# ============================================================
+# Post-Workload Tasks
+# Output user information and finalize deployment
+# ============================================================
+
+- name: Get OpenShift Console URL
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Console
+    name: cluster
+  register: r_console
+
+- name: Set console URL fact
+  ansible.builtin.set_fact:
+    _ocp4_workload_low_latency_workshop_console_url: >-
+      {{ r_console.resources[0].status.consoleURL }}
+
+- name: Get ArgoCD route
+  when: ocp4_workload_low_latency_workshop_deploy_gitops | bool
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: openshift-gitops-server
+    namespace: openshift-gitops
+  register: r_argocd_route
+  ignore_errors: true
+
+- name: Set ArgoCD URL fact
+  when:
+    - ocp4_workload_low_latency_workshop_deploy_gitops | bool
+    - r_argocd_route.resources is defined
+    - r_argocd_route.resources | length > 0
+  ansible.builtin.set_fact:
+    _ocp4_workload_low_latency_workshop_argocd_url: >-
+      https://{{ r_argocd_route.resources[0].spec.host }}
+
+# ============================================================
+# Output User Information
+# ============================================================
+- name: Print user information
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - ""
+    - "============================================================"
+    - "Low Latency Performance Workshop - Deployment Complete"
+    - "============================================================"
+    - ""
+    - "OpenShift Console: {{ _ocp4_workload_low_latency_workshop_console_url }}"
+    - "Cluster Apps Domain: {{ _ocp4_workload_low_latency_workshop_cluster_domain }}"
+    - ""
+
+- name: Print GitOps information
+  when: ocp4_workload_low_latency_workshop_deploy_gitops | bool
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - "OpenShift GitOps (ArgoCD): {{ _ocp4_workload_low_latency_workshop_argocd_url | default('Installing...') }}"
+    - ""
+
+- name: Print Virtualization information
+  when: ocp4_workload_low_latency_workshop_deploy_virtualization | bool
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - "OpenShift Virtualization: Installed in openshift-cnv namespace"
+    - ""
+
+- name: Print SR-IOV information
+  when: ocp4_workload_low_latency_workshop_deploy_sriov | bool
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - "SR-IOV Network Operator: Installed in openshift-sriov-network-operator namespace"
+    - ""
+
+- name: Print documentation information
+  when: ocp4_workload_low_latency_workshop_deploy_docs | bool
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - "Workshop Documentation: https://workshop-docs-{{ ocp4_workload_low_latency_workshop_namespace }}.{{ _ocp4_workload_low_latency_workshop_cluster_domain }}"
+    - ""
+
+- name: Print workshop namespace
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - "Workshop Namespace: {{ ocp4_workload_low_latency_workshop_namespace }}"
+    - ""
+
+- name: Print multi-user information
+  when: ocp4_workload_low_latency_workshop_multi_user_mode | bool
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - "Multi-User Mode: Enabled"
+    - "User Count: {{ ocp4_workload_low_latency_workshop_user_count }}"
+    - "User Prefix: {{ ocp4_workload_low_latency_workshop_user_base }}"
+    - "User Password: {{ ocp4_workload_low_latency_workshop_user_password }}"
+    - ""
+
+- name: Print Dev Spaces information
+  when:
+    - ocp4_workload_low_latency_workshop_multi_user_mode | bool
+    - ocp4_workload_low_latency_workshop_deploy_devspaces | bool
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - "Dev Spaces URL: {{ _ocp4_workload_low_latency_workshop_devspaces_url | default('Installing...') }}"
+    - ""
+
+- name: Print closing
+  agnosticd_user_info:
+    msg: "{{ item }}"
+  loop:
+    - "============================================================"
+
+# ============================================================
+# Save User Data for AgnosticV/RHPDS
+# ============================================================
+- name: Save user data
+  agnosticd_user_info:
+    data:
+      openshift_console_url: "{{ _ocp4_workload_low_latency_workshop_console_url }}"
+      openshift_cluster_domain: "{{ _ocp4_workload_low_latency_workshop_cluster_domain }}"
+      workshop_namespace: "{{ ocp4_workload_low_latency_workshop_namespace }}"
+      argocd_url: "{{ _ocp4_workload_low_latency_workshop_argocd_url | default('') }}"
+      documentation_url: >-
+        https://workshop-docs-{{ ocp4_workload_low_latency_workshop_namespace }}.{{ _ocp4_workload_low_latency_workshop_cluster_domain }}
+      virtualization_installed: "{{ ocp4_workload_low_latency_workshop_deploy_virtualization }}"
+      sriov_installed: "{{ ocp4_workload_low_latency_workshop_deploy_sriov }}"
+
+- name: Workload deployment complete
+  ansible.builtin.debug:
+    msg: "Low Latency Performance Workshop workload deployed successfully"
+

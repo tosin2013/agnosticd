@@ -1,0 +1,281 @@
+---
+# ============================================================
+# Workload Deployment Tasks
+# Deploy Low Latency Performance Workshop components
+# ============================================================
+
+# ============================================================
+# Step 1: Install OpenShift GitOps Operator
+# ============================================================
+- name: Install OpenShift GitOps Operator
+  when: ocp4_workload_low_latency_workshop_deploy_gitops | bool
+  block:
+    - name: Install OpenShift GitOps operator using install_operator role
+      ansible.builtin.include_role:
+        name: install_operator
+      vars:
+        install_operator_action: install
+        install_operator_name: openshift-gitops-operator
+        install_operator_namespace: openshift-operators
+        install_operator_channel: "{{ ocp4_workload_low_latency_workshop_gitops_channel }}"
+        install_operator_catalog: redhat-operators
+        install_operator_automatic_install_plan_approval: >-
+          {{ ocp4_workload_low_latency_workshop_gitops_automatic_approval }}
+        install_operator_starting_csv: "{{ ocp4_workload_low_latency_workshop_gitops_starting_csv }}"
+        install_operator_catalogsource_setup: false
+
+    - name: Wait for OpenShift GitOps ArgoCD instance
+      kubernetes.core.k8s_info:
+        api_version: argoproj.io/v1beta1
+        kind: ArgoCD
+        name: openshift-gitops
+        namespace: openshift-gitops
+      register: r_openshift_gitops
+      retries: 20
+      delay: "{{ ocp4_workload_low_latency_workshop_retry_delay }}"
+      until:
+        - r_openshift_gitops.resources is defined
+        - r_openshift_gitops.resources | length == 1
+
+    - name: Display GitOps installation status
+      ansible.builtin.debug:
+        msg: "OpenShift GitOps operator installed successfully"
+
+# ============================================================
+# Step 2: Install OpenShift Virtualization (CNV) Operator
+# ============================================================
+- name: Install OpenShift Virtualization
+  when: ocp4_workload_low_latency_workshop_deploy_virtualization | bool
+  block:
+    - name: Create openshift-cnv namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+            labels:
+              openshift.io/cluster-monitoring: "true"
+
+    - name: Create CNV OperatorGroup
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1
+          kind: OperatorGroup
+          metadata:
+            name: kubevirt-hyperconverged-group
+            namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+          spec:
+            targetNamespaces:
+              - "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+
+    - name: Create CNV Subscription
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1alpha1
+          kind: Subscription
+          metadata:
+            name: "{{ _ocp4_workload_low_latency_workshop_cnv_subscription }}"
+            namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+          spec:
+            channel: "{{ ocp4_workload_low_latency_workshop_cnv_channel }}"
+            installPlanApproval: >-
+              {{ 'Automatic' if ocp4_workload_low_latency_workshop_cnv_automatic_approval else 'Manual' }}
+            name: kubevirt-hyperconverged
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+
+    - name: Wait for CNV CSV to be ready
+      kubernetes.core.k8s_info:
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+        label_selectors:
+          - "operators.coreos.com/kubevirt-hyperconverged.openshift-cnv"
+      register: r_cnv_csv
+      retries: 30
+      delay: "{{ ocp4_workload_low_latency_workshop_retry_delay }}"
+      until:
+        - r_cnv_csv.resources is defined
+        - r_cnv_csv.resources | length > 0
+        - r_cnv_csv.resources[0].status.phase is defined
+        - r_cnv_csv.resources[0].status.phase == "Succeeded"
+
+    - name: Create HyperConverged instance
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', 'hyperconverged.yaml.j2') | from_yaml }}"
+
+    - name: Wait for HyperConverged to be ready
+      kubernetes.core.k8s_info:
+        api_version: hco.kubevirt.io/v1beta1
+        kind: HyperConverged
+        name: "{{ _ocp4_workload_low_latency_workshop_hco_name }}"
+        namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+      register: r_hco
+      retries: 60
+      delay: "{{ ocp4_workload_low_latency_workshop_retry_delay }}"
+      until:
+        - r_hco.resources is defined
+        - r_hco.resources | length > 0
+        - r_hco.resources[0].status is defined
+        - r_hco.resources[0].status.conditions is defined
+        - r_hco.resources[0].status.conditions | selectattr('type', 'equalto', 'Available') | selectattr('status', 'equalto', 'True') | list | length > 0
+
+    - name: Display Virtualization installation status
+      ansible.builtin.debug:
+        msg: "OpenShift Virtualization installed and HyperConverged ready"
+
+# ============================================================
+# Step 3: Install SR-IOV Network Operator
+# ============================================================
+- name: Install SR-IOV Network Operator
+  when: ocp4_workload_low_latency_workshop_deploy_sriov | bool
+  block:
+    - name: Create openshift-sriov-network-operator namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+            labels:
+              openshift.io/cluster-monitoring: "true"
+
+    - name: Create SR-IOV OperatorGroup
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1
+          kind: OperatorGroup
+          metadata:
+            name: sriov-network-operators
+            namespace: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+          spec:
+            targetNamespaces:
+              - "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+
+    - name: Create SR-IOV Subscription
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1alpha1
+          kind: Subscription
+          metadata:
+            name: "{{ _ocp4_workload_low_latency_workshop_sriov_subscription }}"
+            namespace: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+          spec:
+            channel: "{{ ocp4_workload_low_latency_workshop_sriov_channel }}"
+            installPlanApproval: >-
+              {{ 'Automatic' if ocp4_workload_low_latency_workshop_sriov_automatic_approval else 'Manual' }}
+            name: sriov-network-operator
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+
+    - name: Wait for SR-IOV CSV to be ready
+      kubernetes.core.k8s_info:
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        namespace: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+        label_selectors:
+          - "operators.coreos.com/sriov-network-operator.openshift-sriov-network-operator"
+      register: r_sriov_csv
+      retries: 30
+      delay: "{{ ocp4_workload_low_latency_workshop_retry_delay }}"
+      until:
+        - r_sriov_csv.resources is defined
+        - r_sriov_csv.resources | length > 0
+        - r_sriov_csv.resources[0].status.phase is defined
+        - r_sriov_csv.resources[0].status.phase == "Succeeded"
+
+    - name: Display SR-IOV installation status
+      ansible.builtin.debug:
+        msg: "SR-IOV Network Operator installed successfully"
+
+# ============================================================
+# Step 4: Create Workshop Namespace
+# ============================================================
+- name: Create workshop namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ ocp4_workload_low_latency_workshop_namespace }}"
+        labels:
+          workshop: low-latency-performance
+          student: "{{ ocp4_workload_low_latency_workshop_student_name }}"
+
+# ============================================================
+# Step 5: Deploy Workshop Documentation
+# ============================================================
+- name: Deploy Workshop Documentation
+  when: ocp4_workload_low_latency_workshop_deploy_docs | bool
+  block:
+    - name: Create workshop documentation deployment
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', 'workshop-docs-deployment.yaml.j2') | from_yaml_all | list }}"
+
+    - name: Wait for documentation deployment to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: workshop-docs
+        namespace: "{{ ocp4_workload_low_latency_workshop_namespace }}"
+      register: r_docs_deployment
+      retries: 20
+      delay: 15
+      until:
+        - r_docs_deployment.resources is defined
+        - r_docs_deployment.resources | length > 0
+        - r_docs_deployment.resources[0].status.readyReplicas is defined
+        - r_docs_deployment.resources[0].status.readyReplicas >= 1
+
+    - name: Display documentation URL
+      ansible.builtin.debug:
+        msg: >-
+          Workshop documentation available at:
+          https://workshop-docs-{{ ocp4_workload_low_latency_workshop_namespace }}.{{ _ocp4_workload_low_latency_workshop_cluster_domain }}
+
+# ============================================================
+# Step 6: Multi-User Setup (Optional)
+# ============================================================
+
+# Setup HTPasswd Authentication
+- name: Setup HTPasswd Authentication
+  when:
+    - ocp4_workload_low_latency_workshop_multi_user_mode | bool
+    - ocp4_workload_low_latency_workshop_setup_authentication | bool
+  ansible.builtin.include_tasks: workload_authentication.yml
+
+# Install Dev Spaces
+- name: Install Dev Spaces
+  when:
+    - ocp4_workload_low_latency_workshop_multi_user_mode | bool
+    - ocp4_workload_low_latency_workshop_deploy_devspaces | bool
+  ansible.builtin.include_tasks: workload_devspaces.yml
+
+# Create User Namespaces
+- name: Create User Namespaces
+  when: ocp4_workload_low_latency_workshop_multi_user_mode | bool
+  ansible.builtin.include_tasks: workload_user_namespaces.yml
+  loop: "{{ range(1, (ocp4_workload_low_latency_workshop_user_count | int) + 1) | list }}"
+  loop_control:
+    loop_var: _user_num
+
+# Create User Secrets for Dev Spaces Auto-Mount
+- name: Create User Secrets for Dev Spaces
+  when:
+    - ocp4_workload_low_latency_workshop_multi_user_mode | bool
+    - ocp4_workload_low_latency_workshop_deploy_devspaces | bool
+  ansible.builtin.include_tasks: workload_user_secrets.yml
+  loop: "{{ range(1, (ocp4_workload_low_latency_workshop_user_count | int) + 1) | list }}"
+  loop_control:
+    loop_var: _user_num
+

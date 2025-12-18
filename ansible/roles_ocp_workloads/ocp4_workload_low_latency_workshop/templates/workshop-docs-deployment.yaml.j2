@@ -1,0 +1,93 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workshop-docs
+  namespace: {{ ocp4_workload_low_latency_workshop_namespace }}
+  labels:
+    app: workshop-docs
+    app.kubernetes.io/name: workshop-docs
+    app.kubernetes.io/part-of: low-latency-workshop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workshop-docs
+  template:
+    metadata:
+      labels:
+        app: workshop-docs
+        app.kubernetes.io/name: workshop-docs
+    spec:
+      containers:
+        - name: workshop-docs
+          image: {{ ocp4_workload_low_latency_workshop_docs_image }}
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workshop-docs
+  namespace: {{ ocp4_workload_low_latency_workshop_namespace }}
+  labels:
+    app: workshop-docs
+    app.kubernetes.io/name: workshop-docs
+spec:
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: workshop-docs
+  type: ClusterIP
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: workshop-docs
+  namespace: {{ ocp4_workload_low_latency_workshop_namespace }}
+  labels:
+    app: workshop-docs
+    app.kubernetes.io/name: workshop-docs
+spec:
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: workshop-docs
+    weight: 100
+  wildcardPolicy: None
+

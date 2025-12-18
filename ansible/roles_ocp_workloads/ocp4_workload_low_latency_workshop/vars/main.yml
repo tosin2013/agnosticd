@@ -1,0 +1,16 @@
+---
+# Internal variables - do not override
+# These are computed at runtime
+
+# Operator namespaces
+_ocp4_workload_low_latency_workshop_cnv_namespace: openshift-cnv
+_ocp4_workload_low_latency_workshop_sriov_namespace: openshift-sriov-network-operator
+_ocp4_workload_low_latency_workshop_gitops_namespace: openshift-gitops
+
+# Operator subscription names
+_ocp4_workload_low_latency_workshop_cnv_subscription: kubevirt-hyperconverged
+_ocp4_workload_low_latency_workshop_sriov_subscription: sriov-network-operator-subscription
+
+# HyperConverged CR name
+_ocp4_workload_low_latency_workshop_hco_name: kubevirt-hyperconverged
+

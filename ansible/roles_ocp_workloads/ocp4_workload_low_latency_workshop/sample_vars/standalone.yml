@@ -1,0 +1,49 @@
+---
+# ============================================================
+# Standalone Sample Variables for Low Latency Performance Workshop
+# ============================================================
+# Use this file for standalone testing or development deployments
+#
+# Usage:
+#   ansible-playbook main.yml -e @roles_ocp_workloads/ocp4_workload_low_latency_workshop/sample_vars/standalone.yml
+
+# ============================================================
+# AgnosticD Configuration
+# ============================================================
+cloud_provider: none
+env_type: ocp-workloads
+
+# Workload to deploy
+ocp_workloads:
+  - ocp4_workload_low_latency_workshop
+
+# Target host
+target_host: localhost
+
+# ============================================================
+# Minimal Workshop Configuration (for testing)
+# ============================================================
+# Enable only essential components
+ocp4_workload_low_latency_workshop_deploy_gitops: true
+ocp4_workload_low_latency_workshop_deploy_virtualization: true
+ocp4_workload_low_latency_workshop_deploy_sriov: false  # Disable for faster testing
+ocp4_workload_low_latency_workshop_deploy_docs: true
+
+# Workshop namespace
+ocp4_workload_low_latency_workshop_namespace: low-latency-workshop
+
+# Student configuration
+ocp4_workload_low_latency_workshop_student_name: developer
+
+# ============================================================
+# Shorter Timeouts for Testing
+# ============================================================
+ocp4_workload_low_latency_workshop_operator_install_timeout: 300
+ocp4_workload_low_latency_workshop_hco_ready_timeout: 600
+ocp4_workload_low_latency_workshop_retry_delay: 20
+
+# ============================================================
+# Verbose output for debugging
+# ============================================================
+silent: false
+

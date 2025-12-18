@@ -1,0 +1,77 @@
+---
+# ============================================================
+# Pre-Workload Tasks
+# Verify prerequisites before deploying workshop
+# ============================================================
+
+- name: Verify OpenShift cluster is accessible
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: ClusterVersion
+    name: version
+  register: r_cluster_version
+
+- name: Display cluster information
+  ansible.builtin.debug:
+    msg:
+      - "Cluster Version: {{ r_cluster_version.resources[0].status.desired.version }}"
+      - "Cluster ID: {{ r_cluster_version.resources[0].spec.clusterID }}"
+
+- name: Get cluster infrastructure info
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Infrastructure
+    name: cluster
+  register: r_infrastructure
+
+- name: Set cluster facts
+  ansible.builtin.set_fact:
+    _ocp4_workload_low_latency_workshop_cluster_name: >-
+      {{ r_infrastructure.resources[0].status.infrastructureName }}
+    _ocp4_workload_low_latency_workshop_platform: >-
+      {{ r_infrastructure.resources[0].status.platform }}
+
+- name: Display infrastructure information
+  ansible.builtin.debug:
+    msg:
+      - "Cluster Name: {{ _ocp4_workload_low_latency_workshop_cluster_name }}"
+      - "Platform: {{ _ocp4_workload_low_latency_workshop_platform }}"
+
+- name: Get IngressController for domain
+  kubernetes.core.k8s_info:
+    api_version: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    namespace: openshift-ingress-operator
+  register: r_ingress_controller
+
+- name: Set cluster domain fact
+  ansible.builtin.set_fact:
+    _ocp4_workload_low_latency_workshop_cluster_domain: >-
+      {{ r_ingress_controller.resources[0].status.domain }}
+
+- name: Display cluster domain
+  ansible.builtin.debug:
+    msg: "Cluster Apps Domain: {{ _ocp4_workload_low_latency_workshop_cluster_domain }}"
+
+- name: Check if this is a SNO cluster
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+  register: r_nodes
+
+- name: Set SNO detection fact
+  ansible.builtin.set_fact:
+    _ocp4_workload_low_latency_workshop_is_sno: "{{ r_nodes.resources | length == 1 }}"
+
+- name: Display SNO status
+  ansible.builtin.debug:
+    msg: "Single Node OpenShift (SNO): {{ _ocp4_workload_low_latency_workshop_is_sno }}"
+
+- name: Warn if not SNO
+  when: not _ocp4_workload_low_latency_workshop_is_sno | bool
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: This workload is optimized for Single Node OpenShift (SNO).
+      Running on a multi-node cluster may require additional configuration.
+

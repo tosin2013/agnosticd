@@ -1,0 +1,226 @@
+---
+# ============================================================
+# HTPasswd Authentication Setup
+# Creates workshop users with htpasswd identity provider
+# IDEMPOTENT: Preserves existing users, only adds missing ones
+# ============================================================
+
+- name: Set authentication facts
+  ansible.builtin.set_fact:
+    _htpasswd_secret_name: "{{ ocp4_workload_low_latency_workshop_htpasswd_secret_name }}"
+    _oauth_idp_name: "{{ ocp4_workload_low_latency_workshop_oauth_idp_name }}"
+
+# ============================================================
+# Check for existing htpasswd configuration
+# ============================================================
+- name: Check if htpasswd secret already exists
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ _htpasswd_secret_name }}"
+    namespace: openshift-config
+  register: _existing_htpasswd_secret
+
+- name: Set existing htpasswd fact
+  ansible.builtin.set_fact:
+    _htpasswd_secret_exists: "{{ _existing_htpasswd_secret.resources | length > 0 }}"
+    _existing_htpasswd_content: >-
+      {{ (_existing_htpasswd_secret.resources[0].data.htpasswd | b64decode)
+         if _existing_htpasswd_secret.resources | length > 0 else '' }}
+
+- name: Extract existing usernames from htpasswd
+  ansible.builtin.set_fact:
+    _existing_usernames: >-
+      {{ _existing_htpasswd_content | regex_findall('^([^:]+):', multiline=True) | default([]) }}
+  when: _htpasswd_secret_exists
+
+- name: Set empty existing usernames if no secret
+  ansible.builtin.set_fact:
+    _existing_usernames: []
+  when: not _htpasswd_secret_exists
+
+- name: Display existing users found
+  ansible.builtin.debug:
+    msg:
+      - "Existing htpasswd secret: {{ 'Found' if _htpasswd_secret_exists else 'Not found' }}"
+      - "Existing users: {{ _existing_usernames | length }}"
+      - "Usernames: {{ _existing_usernames }}"
+
+# ============================================================
+# Build list of users to create (skip existing)
+# ============================================================
+- name: Build list of workshop users needed
+  ansible.builtin.set_fact:
+    _workshop_users_needed: []
+
+- name: Add workshop users that don't exist
+  ansible.builtin.set_fact:
+    _workshop_users_needed: >-
+      {{ _workshop_users_needed + [{'username': ocp4_workload_low_latency_workshop_user_base ~ item,
+                                    'password': ocp4_workload_low_latency_workshop_user_password}] }}
+  loop: "{{ range(1, (ocp4_workload_low_latency_workshop_user_count | int) + 1) | list }}"
+  when: (ocp4_workload_low_latency_workshop_user_base ~ item) not in _existing_usernames
+
+- name: Add admin user if not exists
+  ansible.builtin.set_fact:
+    _workshop_users_needed: >-
+      {{ _workshop_users_needed + [{'username': ocp4_workload_low_latency_workshop_admin_user,
+                                    'password': ocp4_workload_low_latency_workshop_admin_password}] }}
+  when: ocp4_workload_low_latency_workshop_admin_user not in _existing_usernames
+
+- name: Display users to be created
+  ansible.builtin.debug:
+    msg:
+      - "Users to create: {{ _workshop_users_needed | length }}"
+      - "New users: {{ _workshop_users_needed | map(attribute='username') | list }}"
+      - "Skipped (already exist): {{ _existing_usernames | intersect(
+           (range(1, (ocp4_workload_low_latency_workshop_user_count | int) + 1) | list | 
+            map('regex_replace', '^(.*)$', ocp4_workload_low_latency_workshop_user_base ~ '\\1') | list) +
+           [ocp4_workload_low_latency_workshop_admin_user]) }}"
+
+# ============================================================
+# Skip if all users already exist
+# ============================================================
+- name: Check if any users need to be created
+  ansible.builtin.set_fact:
+    _users_need_creation: "{{ _workshop_users_needed | length > 0 }}"
+
+- name: Skip authentication setup if all users exist
+  ansible.builtin.debug:
+    msg: "All workshop users already exist - skipping htpasswd update"
+  when: not _users_need_creation
+
+# ============================================================
+# Create/Update htpasswd only if needed
+# ============================================================
+- name: Create or update htpasswd
+  when: _users_need_creation
+  block:
+    - name: Create temporary htpasswd file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .htpasswd
+      register: _htpasswd_file
+
+    - name: Copy existing htpasswd content
+      ansible.builtin.copy:
+        content: "{{ _existing_htpasswd_content }}"
+        dest: "{{ _htpasswd_file.path }}"
+        mode: '0600'
+      when: _htpasswd_secret_exists and _existing_htpasswd_content | length > 0
+
+    - name: Add new users to htpasswd file
+      ansible.builtin.shell: |
+        htpasswd -Bbn "{{ item.username }}" "{{ item.password }}" >> {{ _htpasswd_file.path }}
+      loop: "{{ _workshop_users_needed }}"
+      no_log: true
+      changed_when: true
+
+    - name: Read updated htpasswd file content
+      ansible.builtin.slurp:
+        src: "{{ _htpasswd_file.path }}"
+      register: _htpasswd_content
+
+    - name: Update htpasswd secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "{{ _htpasswd_secret_name }}"
+            namespace: openshift-config
+            labels:
+              workshop: low-latency
+              managed-by: agnosticd
+          data:
+            htpasswd: "{{ _htpasswd_content.content }}"
+          type: Opaque
+
+    - name: Clean up temporary htpasswd file
+      ansible.builtin.file:
+        path: "{{ _htpasswd_file.path }}"
+        state: absent
+
+# ============================================================
+# Configure OAuth Identity Provider (idempotent)
+# ============================================================
+- name: Get current OAuth configuration
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: OAuth
+    name: cluster
+  register: _oauth_config
+
+- name: Check if our identity provider already exists
+  ansible.builtin.set_fact:
+    _idp_exists: >-
+      {{ _oauth_config.resources[0].spec.identityProviders | default([]) | 
+         selectattr('name', 'equalto', _oauth_idp_name) | list | length > 0 }}
+
+- name: Add identity provider if not exists
+  when: not _idp_exists
+  block:
+    - name: Build identity providers list (preserving existing)
+      ansible.builtin.set_fact:
+        _new_identity_providers: >-
+          {{
+            (_oauth_config.resources[0].spec.identityProviders | default([])) +
+            [{
+              'name': _oauth_idp_name,
+              'mappingMethod': 'claim',
+              'type': 'HTPasswd',
+              'htpasswd': {
+                'fileData': {
+                  'name': _htpasswd_secret_name
+                }
+              }
+            }]
+          }}
+
+    - name: Update OAuth with htpasswd identity provider
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: config.openshift.io/v1
+          kind: OAuth
+          metadata:
+            name: cluster
+          spec:
+            identityProviders: "{{ _new_identity_providers }}"
+
+    - name: Wait for OAuth pods to restart
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: openshift-authentication
+        label_selectors:
+          - app=oauth-openshift
+      register: _oauth_pods
+      until:
+        - _oauth_pods.resources | length > 0
+        - _oauth_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 0
+      retries: 30
+      delay: 10
+
+- name: Skip OAuth update - identity provider already exists
+  ansible.builtin.debug:
+    msg: "Identity provider '{{ _oauth_idp_name }}' already configured - skipping OAuth update"
+  when: _idp_exists
+
+# ============================================================
+# Summary
+# ============================================================
+- name: Display authentication setup complete
+  ansible.builtin.debug:
+    msg:
+      - "=============================================="
+      - "HTPasswd Authentication Setup Complete"
+      - "=============================================="
+      - "Identity Provider: {{ _oauth_idp_name }}"
+      - "Secret: {{ _htpasswd_secret_name }}"
+      - "New users created: {{ _workshop_users_needed | length }}"
+      - "Existing users preserved: {{ _existing_usernames | length }}"
+      - "Total workshop users: {{ ocp4_workload_low_latency_workshop_user_count }}"
+      - "Admin user: {{ ocp4_workload_low_latency_workshop_admin_user }}"
+      - "=============================================="

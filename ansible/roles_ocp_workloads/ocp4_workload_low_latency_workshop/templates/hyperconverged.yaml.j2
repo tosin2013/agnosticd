@@ -1,0 +1,70 @@
+---
+apiVersion: hco.kubevirt.io/v1beta1
+kind: HyperConverged
+metadata:
+  name: {{ _ocp4_workload_low_latency_workshop_hco_name }}
+  namespace: {{ _ocp4_workload_low_latency_workshop_cnv_namespace }}
+  annotations:
+    deployOVS: 'false'
+spec:
+  # Enable common boot image import for VM templates
+  enableCommonBootImageImport: true
+
+  # Virtual Machine options
+  virtualMachineOptions:
+    disableFreePageReporting: false
+    disableSerialConsoleLog: false
+
+  # Higher workload density - optimized for SNO
+  higherWorkloadDensity:
+    memoryOvercommitPercentage: {{ ocp4_workload_low_latency_workshop_cnv_memory_overcommit }}
+
+  # Live migration configuration
+  liveMigrationConfig:
+    allowAutoConverge: false
+    allowPostCopy: false
+    completionTimeoutPerGiB: 150
+    parallelMigrationsPerCluster: 5
+    parallelOutboundMigrationsPerNode: 2
+    progressTimeout: 150
+
+  # Certificate configuration
+  certConfig:
+    ca:
+      duration: 48h0m0s
+      renewBefore: 24h0m0s
+    server:
+      duration: 24h0m0s
+      renewBefore: 12h0m0s
+
+  # Application-aware quota (disabled for workshop)
+  enableApplicationAwareQuota: false
+  applicationAwareConfig:
+    allowApplicationAwareClusterResourceQuota: false
+    vmiCalcConfigName: DedicatedVirtualResources
+
+  # Feature gates
+  featureGates:
+    downwardMetrics: false
+    disableMDevConfiguration: false
+    deployKubeSecondaryDNS: false
+    alignCPUs: false
+    persistentReservation: false
+
+  # Workload update strategy
+  workloadUpdateStrategy:
+    batchEvictionInterval: 1m0s
+    batchEvictionSize: 10
+    workloadUpdateMethods:
+      - LiveMigrate
+
+  # VM console proxy (disabled for workshop)
+  deployVmConsoleProxy: false
+
+  # Uninstall strategy
+  uninstallStrategy: BlockUninstallIfWorkloadsExist
+
+  # Resource requirements - optimized for SNO
+  resourceRequirements:
+    vmiCPUAllocationRatio: {{ ocp4_workload_low_latency_workshop_cnv_cpu_allocation_ratio }}
+

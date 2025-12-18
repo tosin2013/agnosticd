@@ -1,0 +1,29 @@
+---
+# Role metadata
+galaxy_info:
+  author: Red Hat
+  description: Deploy Low Latency Performance Workshop on SNO
+  company: Red Hat
+  license: Apache-2.0
+  min_ansible_version: "2.14"
+  platforms:
+    - name: OpenShift
+      versions:
+        - "4.14"
+        - "4.15"
+        - "4.16"
+        - "4.17"
+        - "4.18"
+        - "4.19"
+        - "4.20"
+  galaxy_tags:
+    - openshift
+    - workshop
+    - low-latency
+    - performance
+    - sno
+    - virtualization
+    - sriov
+
+dependencies: []
+

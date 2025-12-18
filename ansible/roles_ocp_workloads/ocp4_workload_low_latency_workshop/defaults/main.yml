@@ -1,0 +1,156 @@
+---
+# ============================================================
+# Low Latency Performance Workshop - Default Variables
+# ============================================================
+# All variables are prefixed with ocp4_workload_low_latency_workshop_
+# to follow AgnosticD naming conventions
+
+# Standard AgnosticD variables
+ocp_username: system:admin
+become_override: false
+silent: false
+
+# ============================================================
+# OpenShift Version Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_ocp_version: "4.20"
+
+# ============================================================
+# Operator Installation Toggles
+# ============================================================
+# Enable/disable individual operator installations
+ocp4_workload_low_latency_workshop_deploy_gitops: true
+ocp4_workload_low_latency_workshop_deploy_virtualization: true
+ocp4_workload_low_latency_workshop_deploy_sriov: true
+ocp4_workload_low_latency_workshop_deploy_node_tuning: true
+
+# ============================================================
+# OpenShift GitOps Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_gitops_channel: latest
+ocp4_workload_low_latency_workshop_gitops_automatic_approval: true
+ocp4_workload_low_latency_workshop_gitops_starting_csv: ""
+
+# ============================================================
+# OpenShift Virtualization Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_cnv_channel: stable
+ocp4_workload_low_latency_workshop_cnv_automatic_approval: true
+ocp4_workload_low_latency_workshop_cnv_starting_csv: ""
+
+# HyperConverged settings optimized for SNO
+ocp4_workload_low_latency_workshop_cnv_memory_overcommit: 100
+ocp4_workload_low_latency_workshop_cnv_cpu_allocation_ratio: 10
+
+# ============================================================
+# SR-IOV Network Operator Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_sriov_channel: stable
+ocp4_workload_low_latency_workshop_sriov_automatic_approval: true
+ocp4_workload_low_latency_workshop_sriov_starting_csv: ""
+
+# ============================================================
+# Workshop Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_namespace: low-latency-workshop
+
+# Workshop documentation deployment
+ocp4_workload_low_latency_workshop_deploy_docs: true
+ocp4_workload_low_latency_workshop_docs_image: quay.io/tosin2013/low-latency-workshop-docs:latest
+
+# ============================================================
+# Multi-User Workshop Configuration
+# ============================================================
+# Enable multi-user mode (authentication, per-user namespaces, etc.)
+ocp4_workload_low_latency_workshop_multi_user_mode: false
+
+# Number of workshop users to create
+ocp4_workload_low_latency_workshop_user_count: 5
+
+# User naming
+ocp4_workload_low_latency_workshop_user_base: user
+ocp4_workload_low_latency_workshop_user_password: "workshop"
+
+# Per-user namespace prefix
+ocp4_workload_low_latency_workshop_namespace_prefix: "workshop-"
+
+# User namespace role (admin, edit, or view)
+ocp4_workload_low_latency_workshop_user_namespace_role: admin
+
+# Apply resource quotas to user namespaces
+ocp4_workload_low_latency_workshop_apply_resource_quota: false
+ocp4_workload_low_latency_workshop_apply_limit_range: false
+
+# ============================================================
+# HTPasswd Authentication Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_setup_authentication: false
+ocp4_workload_low_latency_workshop_htpasswd_secret_name: htpasswd-workshop-secret
+ocp4_workload_low_latency_workshop_oauth_idp_name: workshop-htpasswd
+
+# Admin user for workshop
+ocp4_workload_low_latency_workshop_admin_user: admin
+ocp4_workload_low_latency_workshop_admin_password: "redhat123"
+
+# Remove kubeadmin after setup (not recommended for workshops)
+ocp4_workload_low_latency_workshop_remove_kubeadmin: false
+
+# ============================================================
+# Dev Spaces Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_deploy_devspaces: false
+ocp4_workload_low_latency_workshop_devspaces_namespace: openshift-devspaces
+ocp4_workload_low_latency_workshop_devspaces_channel: stable
+ocp4_workload_low_latency_workshop_devspaces_checluster_name: devspaces
+
+# CheCluster settings
+ocp4_workload_low_latency_workshop_devspaces_max_workspaces_per_user: 1
+ocp4_workload_low_latency_workshop_devspaces_storage_strategy: per-user
+ocp4_workload_low_latency_workshop_devspaces_idle_timeout: 1800
+
+# Dev Spaces auto-mount secrets
+ocp4_workload_low_latency_workshop_devspaces_mount_kubeconfig: true
+ocp4_workload_low_latency_workshop_devspaces_mount_ssh_key: true
+ocp4_workload_low_latency_workshop_devspaces_kubeconfig_mount_path: /home/user/.kube
+ocp4_workload_low_latency_workshop_devspaces_ssh_mount_path: /home/user/.ssh
+
+# ============================================================
+# Student Configuration (single-user mode)
+# ============================================================
+ocp4_workload_low_latency_workshop_student_name: "{{ student_name | default('student1') }}"
+
+# ============================================================
+# Workshop Repository Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_repo_url: "https://github.com/tosin2013/low-latency-performance-workshop.git"
+ocp4_workload_low_latency_workshop_repo_branch: main
+
+# ============================================================
+# Per-User Documentation (BuildConfig-based)
+# ============================================================
+ocp4_workload_low_latency_workshop_per_user_docs: false
+ocp4_workload_low_latency_workshop_docs_dockerfile_path: gitops/workshop-docs/Dockerfile
+
+# ============================================================
+# Timeouts (seconds)
+# ============================================================
+ocp4_workload_low_latency_workshop_operator_install_timeout: 600
+ocp4_workload_low_latency_workshop_hco_ready_timeout: 900
+ocp4_workload_low_latency_workshop_devspaces_ready_timeout: 900
+ocp4_workload_low_latency_workshop_retry_delay: 30
+
+# ============================================================
+# RHACM Integration (optional)
+# ============================================================
+ocp4_workload_low_latency_workshop_rhacm_integration: false
+ocp4_workload_low_latency_workshop_managedclusterset: workshop-clusters
+ocp4_workload_low_latency_workshop_cluster_labels:
+  workshop: low-latency
+  cluster-type: sno
+
+# SNO output directory (for kubeconfig/SSH keys)
+ocp4_workload_low_latency_workshop_sno_output_dir: "{{ lookup('env', 'HOME') }}/agnosticd-output"
+
+# Subdomain suffix (for DNS)
+ocp4_workload_low_latency_workshop_subdomain_base_suffix: "{{ subdomain_base_suffix | default('') }}"
+

@@ -1,0 +1,192 @@
+---
+# ============================================================
+# Remove Workload Tasks
+# Clean up Low Latency Performance Workshop components
+# ============================================================
+
+- name: Display removal start
+  ansible.builtin.debug:
+    msg: "Starting removal of Low Latency Performance Workshop workload"
+
+# ============================================================
+# Step 1: Remove Workshop Documentation
+# ============================================================
+- name: Remove workshop documentation
+  when: ocp4_workload_low_latency_workshop_deploy_docs | bool
+  block:
+    - name: Delete workshop documentation resources
+      kubernetes.core.k8s:
+        state: absent
+        api_version: "{{ item.api_version }}"
+        kind: "{{ item.kind }}"
+        name: "{{ item.name }}"
+        namespace: "{{ ocp4_workload_low_latency_workshop_namespace }}"
+      loop:
+        - api_version: route.openshift.io/v1
+          kind: Route
+          name: workshop-docs
+        - api_version: v1
+          kind: Service
+          name: workshop-docs
+        - api_version: apps/v1
+          kind: Deployment
+          name: workshop-docs
+      ignore_errors: true
+
+# ============================================================
+# Step 2: Remove Workshop Namespace
+# ============================================================
+- name: Delete workshop namespace
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Namespace
+    name: "{{ ocp4_workload_low_latency_workshop_namespace }}"
+  ignore_errors: true
+
+# ============================================================
+# Step 3: Remove HyperConverged Instance
+# ============================================================
+- name: Remove HyperConverged instance
+  when: ocp4_workload_low_latency_workshop_deploy_virtualization | bool
+  block:
+    - name: Delete HyperConverged CR
+      kubernetes.core.k8s:
+        state: absent
+        api_version: hco.kubevirt.io/v1beta1
+        kind: HyperConverged
+        name: "{{ _ocp4_workload_low_latency_workshop_hco_name }}"
+        namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+      ignore_errors: true
+
+    - name: Wait for HyperConverged to be removed
+      kubernetes.core.k8s_info:
+        api_version: hco.kubevirt.io/v1beta1
+        kind: HyperConverged
+        name: "{{ _ocp4_workload_low_latency_workshop_hco_name }}"
+        namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+      register: r_hco_removed
+      retries: 60
+      delay: 10
+      until: r_hco_removed.resources | length == 0
+      ignore_errors: true
+
+# ============================================================
+# Step 4: Remove CNV Operator
+# ============================================================
+- name: Remove OpenShift Virtualization operator
+  when: ocp4_workload_low_latency_workshop_deploy_virtualization | bool
+  block:
+    - name: Delete CNV Subscription
+      kubernetes.core.k8s:
+        state: absent
+        api_version: operators.coreos.com/v1alpha1
+        kind: Subscription
+        name: "{{ _ocp4_workload_low_latency_workshop_cnv_subscription }}"
+        namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+      ignore_errors: true
+
+    - name: Get CNV CSV
+      kubernetes.core.k8s_info:
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+        label_selectors:
+          - "operators.coreos.com/kubevirt-hyperconverged.openshift-cnv"
+      register: r_cnv_csv
+      ignore_errors: true
+
+    - name: Delete CNV CSV
+      when: r_cnv_csv.resources | length > 0
+      kubernetes.core.k8s:
+        state: absent
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        name: "{{ r_cnv_csv.resources[0].metadata.name }}"
+        namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+      ignore_errors: true
+
+    - name: Delete CNV OperatorGroup
+      kubernetes.core.k8s:
+        state: absent
+        api_version: operators.coreos.com/v1
+        kind: OperatorGroup
+        name: kubevirt-hyperconverged-group
+        namespace: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+      ignore_errors: true
+
+    - name: Delete CNV namespace
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ _ocp4_workload_low_latency_workshop_cnv_namespace }}"
+      ignore_errors: true
+
+# ============================================================
+# Step 5: Remove SR-IOV Operator
+# ============================================================
+- name: Remove SR-IOV Network Operator
+  when: ocp4_workload_low_latency_workshop_deploy_sriov | bool
+  block:
+    - name: Delete SR-IOV Subscription
+      kubernetes.core.k8s:
+        state: absent
+        api_version: operators.coreos.com/v1alpha1
+        kind: Subscription
+        name: "{{ _ocp4_workload_low_latency_workshop_sriov_subscription }}"
+        namespace: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+      ignore_errors: true
+
+    - name: Get SR-IOV CSV
+      kubernetes.core.k8s_info:
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        namespace: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+        label_selectors:
+          - "operators.coreos.com/sriov-network-operator.openshift-sriov-network-operator"
+      register: r_sriov_csv
+      ignore_errors: true
+
+    - name: Delete SR-IOV CSV
+      when: r_sriov_csv.resources | length > 0
+      kubernetes.core.k8s:
+        state: absent
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        name: "{{ r_sriov_csv.resources[0].metadata.name }}"
+        namespace: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+      ignore_errors: true
+
+    - name: Delete SR-IOV OperatorGroup
+      kubernetes.core.k8s:
+        state: absent
+        api_version: operators.coreos.com/v1
+        kind: OperatorGroup
+        name: sriov-network-operators
+        namespace: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+      ignore_errors: true
+
+    - name: Delete SR-IOV namespace
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ _ocp4_workload_low_latency_workshop_sriov_namespace }}"
+      ignore_errors: true
+
+# ============================================================
+# Note: OpenShift GitOps is NOT removed as it may be used
+# by other workloads on the cluster
+# ============================================================
+- name: GitOps removal notice
+  when: ocp4_workload_low_latency_workshop_deploy_gitops | bool
+  ansible.builtin.debug:
+    msg: >-
+      OpenShift GitOps operator was NOT removed as it may be used by
+      other workloads. Remove manually if no longer needed.
+
+- name: Display removal complete
+  ansible.builtin.debug:
+    msg: "Low Latency Performance Workshop workload removed"
+

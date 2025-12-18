@@ -1,0 +1,235 @@
+= ocp4_workload_low_latency_workshop - Low Latency Performance Workshop
+
+== Overview
+
+This workload deploys the Low Latency Performance Workshop on a Single Node OpenShift (SNO) cluster. The workshop teaches performance tuning techniques for real-time and low-latency workloads on OpenShift.
+
+== Supported Cloud Providers
+
+* AWS (EC2)
+* Azure
+* GCP
+* Any platform supporting SNO
+
+== Prerequisites
+
+* An existing OpenShift 4.14+ cluster (preferably SNO)
+* Cluster admin access
+* Sufficient resources:
+** Minimum 16 vCPU
+** Minimum 64GB RAM
+** Minimum 200GB storage
+
+== Deployed Components
+
+This workload installs:
+
+1. **OpenShift GitOps (ArgoCD)** - GitOps continuous delivery
+2. **OpenShift Virtualization** - KubeVirt-based VM management
+3. **SR-IOV Network Operator** - Network performance optimization
+4. **Workshop Documentation** - Antora-based workshop guides
+
+== Role Variables
+
+=== Operator Installation Toggles
+
+[cols="3,1,4",options="header"]
+|===
+|Variable |Default |Description
+
+|`ocp4_workload_low_latency_workshop_deploy_gitops`
+|`true`
+|Install OpenShift GitOps operator
+
+|`ocp4_workload_low_latency_workshop_deploy_virtualization`
+|`true`
+|Install OpenShift Virtualization operator
+
+|`ocp4_workload_low_latency_workshop_deploy_sriov`
+|`true`
+|Install SR-IOV Network Operator
+
+|`ocp4_workload_low_latency_workshop_deploy_docs`
+|`true`
+|Deploy workshop documentation
+|===
+
+=== OpenShift GitOps Configuration
+
+[cols="3,1,4",options="header"]
+|===
+|Variable |Default |Description
+
+|`ocp4_workload_low_latency_workshop_gitops_channel`
+|`latest`
+|Operator subscription channel
+
+|`ocp4_workload_low_latency_workshop_gitops_automatic_approval`
+|`true`
+|Auto-approve install plans
+|===
+
+=== OpenShift Virtualization Configuration
+
+[cols="3,1,4",options="header"]
+|===
+|Variable |Default |Description
+
+|`ocp4_workload_low_latency_workshop_cnv_channel`
+|`stable`
+|Operator subscription channel
+
+|`ocp4_workload_low_latency_workshop_cnv_memory_overcommit`
+|`100`
+|Memory overcommit percentage
+
+|`ocp4_workload_low_latency_workshop_cnv_cpu_allocation_ratio`
+|`10`
+|vCPU to physical CPU ratio
+|===
+
+=== SR-IOV Configuration
+
+[cols="3,1,4",options="header"]
+|===
+|Variable |Default |Description
+
+|`ocp4_workload_low_latency_workshop_sriov_channel`
+|`stable`
+|Operator subscription channel
+|===
+
+=== Workshop Configuration
+
+[cols="3,1,4",options="header"]
+|===
+|Variable |Default |Description
+
+|`ocp4_workload_low_latency_workshop_namespace`
+|`low-latency-workshop`
+|Workshop namespace
+
+|`ocp4_workload_low_latency_workshop_docs_image`
+|`quay.io/tosin2013/low-latency-workshop-docs:latest`
+|Documentation container image
+
+|`ocp4_workload_low_latency_workshop_student_name`
+|`student1`
+|Student identifier
+|===
+
+== Deployment
+
+=== Using ocp-workloads Config
+
+Create a variables file:
+
+.vars.yml
+[source,yaml]
+----
+cloud_provider: none
+env_type: ocp-workloads
+
+ocp_workloads:
+  - ocp4_workload_low_latency_workshop
+
+target_host: localhost
+
+# Optional customizations
+ocp4_workload_low_latency_workshop_deploy_docs: true
+ocp4_workload_low_latency_workshop_student_name: student1
+----
+
+Run the deployment:
+
+[source,bash]
+----
+cd agnosticd/ansible
+ansible-playbook main.yml -e @vars.yml
+----
+
+=== Direct Role Invocation
+
+[source,bash]
+----
+ansible-playbook -i localhost, -c local ./configs/ocp-workloads/ocp-workload.yml \
+  -e ocp_workload=ocp4_workload_low_latency_workshop \
+  -e ACTION=create
+----
+
+== Removal
+
+To remove the workload:
+
+[source,bash]
+----
+ansible-playbook -i localhost, -c local ./configs/ocp-workloads/ocp-workload.yml \
+  -e ocp_workload=ocp4_workload_low_latency_workshop \
+  -e ACTION=destroy
+----
+
+NOTE: OpenShift GitOps is NOT removed automatically as it may be used by other workloads.
+
+== Workshop Modules
+
+The workshop covers:
+
+1. **Module 1**: Introduction to Low Latency Computing
+2. **Module 2**: OpenShift Performance Fundamentals
+3. **Module 3**: Baseline Performance Measurement
+4. **Module 4**: CPU Isolation and NUMA Tuning
+5. **Module 5**: Virtual Machine Performance (using OpenShift Virtualization)
+6. **Module 6**: Advanced Topics and Best Practices
+
+== User Information
+
+After deployment, the following information is provided:
+
+* OpenShift Console URL
+* ArgoCD URL (if GitOps enabled)
+* Workshop Documentation URL
+* Workshop Namespace
+
+== Troubleshooting
+
+=== Operator Installation Issues
+
+Check operator status:
+
+[source,bash]
+----
+oc get csv -n openshift-cnv
+oc get csv -n openshift-sriov-network-operator
+oc get csv -n openshift-operators | grep gitops
+----
+
+=== HyperConverged Not Ready
+
+Check HyperConverged status:
+
+[source,bash]
+----
+oc get hyperconverged kubevirt-hyperconverged -n openshift-cnv -o yaml
+oc get pods -n openshift-cnv
+----
+
+=== Documentation Not Loading
+
+Check deployment status:
+
+[source,bash]
+----
+oc get pods -n low-latency-workshop
+oc get route workshop-docs -n low-latency-workshop
+----
+
+== References
+
+* link:https://github.com/tosin2013/low-latency-performance-workshop[Workshop Repository]
+* link:https://docs.openshift.com/container-platform/latest/virt/about_virt/about-virt.html[OpenShift Virtualization Documentation]
+* link:https://docs.openshift.com/container-platform/latest/networking/hardware_networks/about-sriov.html[SR-IOV Documentation]
+
+== Author
+
+Red Hat - Low Latency Performance Workshop Team
+

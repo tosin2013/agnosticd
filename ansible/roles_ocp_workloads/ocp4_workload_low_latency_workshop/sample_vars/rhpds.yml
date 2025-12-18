@@ -1,0 +1,68 @@
+---
+# ============================================================
+# RHPDS Sample Variables for Low Latency Performance Workshop
+# ============================================================
+# Use this file as a template for RHPDS catalog item configuration
+#
+# Usage:
+#   ansible-playbook main.yml -e @roles_ocp_workloads/ocp4_workload_low_latency_workshop/sample_vars/rhpds.yml
+
+# ============================================================
+# AgnosticD Configuration
+# ============================================================
+cloud_provider: none
+env_type: ocp-workloads
+
+# Workload to deploy
+ocp_workloads:
+  - ocp4_workload_low_latency_workshop
+
+# Target host (assumes kubeconfig is configured)
+target_host: localhost
+
+# ============================================================
+# Workshop Configuration
+# ============================================================
+# All operators enabled for full workshop experience
+ocp4_workload_low_latency_workshop_deploy_gitops: true
+ocp4_workload_low_latency_workshop_deploy_virtualization: true
+ocp4_workload_low_latency_workshop_deploy_sriov: true
+ocp4_workload_low_latency_workshop_deploy_docs: true
+
+# Workshop namespace
+ocp4_workload_low_latency_workshop_namespace: low-latency-workshop
+
+# Student configuration (override per deployment)
+ocp4_workload_low_latency_workshop_student_name: "{{ student_name | default('student1') }}"
+
+# ============================================================
+# Operator Channels
+# ============================================================
+# Use stable channels for production deployments
+ocp4_workload_low_latency_workshop_gitops_channel: latest
+ocp4_workload_low_latency_workshop_cnv_channel: stable
+ocp4_workload_low_latency_workshop_sriov_channel: stable
+
+# ============================================================
+# Virtualization Settings (optimized for SNO)
+# ============================================================
+ocp4_workload_low_latency_workshop_cnv_memory_overcommit: 100
+ocp4_workload_low_latency_workshop_cnv_cpu_allocation_ratio: 10
+
+# ============================================================
+# Timeout Configuration
+# ============================================================
+ocp4_workload_low_latency_workshop_operator_install_timeout: 600
+ocp4_workload_low_latency_workshop_hco_ready_timeout: 900
+ocp4_workload_low_latency_workshop_retry_delay: 30
+
+# ============================================================
+# Documentation Image
+# ============================================================
+ocp4_workload_low_latency_workshop_docs_image: quay.io/tosin2013/low-latency-workshop-docs:latest
+
+# ============================================================
+# Silent mode (reduce output)
+# ============================================================
+silent: false
+
