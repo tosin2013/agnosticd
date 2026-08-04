@@ -50,7 +50,10 @@
 - name: Set ROSA version to latest upgradable version available for {{ rosa_version_base }}
   when: rosa_version == "latest-upgrade"
   vars:
-    _query: "[?starts_with(id, '{{ rosa_version_base }}') && available_upgrades != `null`] | [0]"
+    _rosa_minor_version: "{{ rosa_version_base | regex_replace('^openshift-v', '') }}"
+    _query: >-
+      [?starts_with(id, '{{ rosa_version_base }}')
+      && available_upgrades[?starts_with(@, '{{ rosa_version_base | regex_replace('^openshift-v', '') }}.')]] | [0]
     _latest_upgrade_version: "{{ r_rosa_versions.stdout | from_json | community.general.json_query(_query) }}"
   block:
   - name: Fail if no upgradable version was found for {{ rosa_version_base }}
@@ -59,10 +62,15 @@
       msg: "No upgradable version found for {{ rosa_version_base }}"
 
   - name: Set upgradable version facts
+    vars:
+      _upgrade_query: "[?starts_with(@, '{{ rosa_version_base | regex_replace('^openshift-v', '') }}.')]"
+      _same_minor_upgrades: >-
+        {{ _latest_upgrade_version.available_upgrades
+           | community.general.json_query(_upgrade_query) }}
     ansible.builtin.set_fact:
       _rosa_version_to_install: "{{ _latest_upgrade_version.raw_id }}"
       _rosa_ocp_cli_version: "{{ _latest_upgrade_version.raw_id }}"
-      _rosa_version_next: "{{ _latest_upgrade_version.available_upgrades[0] }}"
+      _rosa_version_next: "{{ _same_minor_upgrades | last }}"
 
   rescue:
   - name: Fallback to latest ROSA version available for {{ rosa_version_base }}

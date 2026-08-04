@@ -27,16 +27,16 @@
   agnosticd_user_info:
     msg: |
 
-      Wildcard DNS will point to your bastion: *.{{ guid }}.{{ cluster_dns_zone }}
+      Wildcard DNS will point to your bastion: *.cluster-{{ guid }}.{{ cluster_dns_zone }}
 
 - name: Print DNS information for OCP
   when: sandbox_user_info_messages_enable | bool and (ocp_dns | default(False))
   agnosticd_user_info:
     msg: |
 
-      API DNS api.{{ guid }}.{{ cluster_dns_zone }} points to NAT IP to {{ hostvars.localhost.project_segment_cidr | nthhost(201) }}
+      API DNS api.cluster-{{ guid }}.{{ cluster_dns_zone }} points to NAT IP to {{ hostvars.localhost.project_segment_cidr | nthhost(201) }}
 
-      Wildcard DNS *.apps.{{ guid }}.{{ cluster_dns_zone }} points to NAT IP to {{ hostvars.localhost.project_segment_cidr | nthhost(202) }}
+      Wildcard DNS *.apps.cluster-{{ guid }}.{{ cluster_dns_zone }} points to NAT IP to {{ hostvars.localhost.project_segment_cidr | nthhost(202) }}
 
       You need to specify the folder /{{ vcenter_datacenter }}/vm/Workloads/{{ env_type }}-{{ guid }} on the install-config.yaml
 

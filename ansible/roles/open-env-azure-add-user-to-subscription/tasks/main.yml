@@ -4,6 +4,7 @@
     internal_user: True
   when:
     - '"@redhat.com" in requester_email'
+    - '"+" not in requester_email.split("@")[0]'
     - agnosticd_open_environment | default(false) | bool
 
 - name: Check if email is not a Red Hat associate
@@ -147,6 +148,19 @@
       until:
         - azapp.applications | length > 0
 
+    - name: Add user as owner of the application registration
+      when:
+        - internal_user | default(false) | bool
+      ansible.builtin.command: >-
+        az rest --method POST
+        --url "https://graph.microsoft.com/v1.0/applications/{{ azapp.applications[0].object_id }}/owners/$ref"
+        --headers "Content-Type=application/json"
+        --body "{\"@odata.id\": \"https://graph.microsoft.com/v1.0/directoryObjects/{{ azuser.ad_users[0].object_id }}\"}"
+      register: add_owner_result
+      failed_when:
+        - add_owner_result.rc != 0
+        - "'One or more added object references already exist' not in add_owner_result.stderr"
+
     - name: Get password
       when: azappcreate.changed
       set_fact: azpass="{{ azappcreate.stdout | from_json | json_query('password') }}"
@@ -158,6 +172,10 @@
         app_id: "{{ azapp.applications[0].app_id }}"
         subscription_id: "{{ subscription_id }}"
       register: azsp
+      retries: 30
+      delay: 10
+      until:
+        - azsp.service_principals | length > 0
 
     - name: Add SP to group
       azure.azcollection.azure_rm_adgroup:
@@ -167,6 +185,10 @@
         tenant: "{{ azure_tenant }}"
         present_members:
           - "{{ azsp.service_principals[0].object_id }}"
+      register: add_sp_to_group_result
+      failed_when:
+        - add_sp_to_group_result is failed
+        - "'already exist' not in add_sp_to_group_result.module_stderr | default('')"
 
     - name: Log out of Azure CLI
       command: >
@@ -210,6 +232,10 @@
         app_id: "{{ azaroapp.applications[0].app_id }}"
         tenant: "{{ azure_tenant }}"
       register: azaroappsp
+      retries: 30
+      delay: 10
+      until:
+        - azaroappsp.service_principals | length > 0
 
     - name: Save ARO SP password
       ansible.builtin.set_fact: az_aro_pass="{{ azaroappcreate.stdout | from_json | json_query('password') }}"

@@ -133,12 +133,9 @@
           interfaces: {{ _instance_interfaces }}
           networkInterfaceMultiqueue: true
         machine:
-          type: pc-q35-rhel8.6.0
-        resources:
-          requests:
-            memory: "{{ ai_workers_memory }}"
-          limits:
-            memory: "{{ ai_workers_memory }}"
+          type: pc-q35-rhel9.2.0
+        memory:
+          guest: "{{ ai_workers_memory }}"
       readinessProbe:
         tcpSocket:
           port: 80

@@ -30,7 +30,7 @@
       ansible.builtin.nsupdate:
         server: >-
           {{ cluster_dns_server
-          | ipaddr
+          | ansible.utils.ipaddr
           | ternary(cluster_dns_server, lookup('dig', cluster_dns_server))
           }}
         zone: "{{ cluster_dns_zone }}"
@@ -40,8 +40,10 @@
         port: "{{ cluster_dns_port | d('53') }}"
         key_name: "{{ ddns_key_name }}"
         key_secret: "{{ ddns_key_secret }}"
+        key_algorithm: "hmac-sha256"
         state: absent
       loop:
+        - "api-int"
         - "api"
         - "*.apps"
 
@@ -68,14 +70,17 @@
         offline_token: "{{ ai_offline_token }}"
         owner: true
       register: listclusters
+      ignore_errors: true
 
     - name: Filter the created clusters
       ansible.builtin.set_fact:
         cluster_id: "{{ item.id }}"
-      when: item.name == cluster_name
-      loop: "{{ listclusters.result }}"
+      when:
+        - listclusters is succeeded
+        - item.name == cluster_name
+      loop: "{{ listclusters.result | default([]) }}"
       loop_control:
-        label: "{{ item.name }}"
+        label: "{{ item.name | default('unknown') }}"
 
     - name: Remove Assisted Installer Cluster
       rhpds.assisted_installer.delete_cluster:
